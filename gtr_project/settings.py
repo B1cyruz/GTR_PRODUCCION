@@ -2,12 +2,12 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-ALLOWED_HOSTS = ['*']  # O ['.onrender.com', 'localhost', '127.0.0.1']
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
 # Cargar variables de entorno desde .env
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
+
+ALLOWED_HOSTS = ['*']  # O ['.onrender.com', 'localhost', '127.0.0.1']
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-gtr-logistics-cartagena-2026-prod-secret-key-token')
 DEBUG = os.getenv('DEBUG', 'True').strip().lower() in ('true', '1', 'yes')
