@@ -1,0 +1,999 @@
+{% extends "base.html" %}
+{% load static gtr_tags l10n %}
+
+{% block title %}Dashboard GTR - Panel de Control Logístico{% endblock %}
+{% block breadcrumb %}Dashboard General{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+
+  <!-- Header Action Banner -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+    <div>
+      <h1 class="font-heading text-2xl font-bold text-slate-900 tracking-tight">Panel de Control de Distribución</h1>
+      <p class="text-sm text-slate-500 mt-1">Supervisión operativa en tiempo real para Cartagena y zona metropolitana.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{% url 'route_optimizer' %}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition shadow-sm">
+        <span class="material-symbols-outlined text-base text-sky-400">alt_route</span>
+        <span>Optimizar Rutas del Día</span>
+      </a>
+      <div class="h-12 w-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
+        <span class="material-symbols-outlined text-2xl">inventory_2</span>
+      </div>
+    </div>
+
+    <!-- En Ruta / Tránsito -->
+    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">En Ruta / Tránsito</p>
+        <h3 class="font-heading text-3xl font-extrabold text-sky-600 mt-1.5">{{ kpis.in_transit }}</h3>
+        <p class="text-[11px] text-slate-500 mt-1 flex items-center gap-1 font-medium">
+          <span class="text-sky-600 font-semibold">{{ kpis.active_drivers_count }}</span> repartidores en calle
+        </p>
+      </div>
+      <div class="h-12 w-12 rounded-2xl bg-sky-500/10 text-sky-600 flex items-center justify-center border border-sky-500/20">
+        <span class="material-symbols-outlined text-2xl">moped</span>
+      </div>
+    </div>
+
+    <!-- Entregados -->
+    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Entregados con Éxito</p>
+        <h3 class="font-heading text-3xl font-extrabold text-emerald-600 mt-1.5">{{ kpis.delivered }}</h3>
+        <p class="text-[11px] text-emerald-600 mt-1 flex items-center gap-1 font-medium">
+          <span class="material-symbols-outlined text-xs">trending_up</span> {{ kpis.efficiency }}% de efectividad
+        </p>
+      </div>
+      <div class="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+        <span class="material-symbols-outlined text-2xl">verified</span>
+      </div>
+    </div>
+
+    <!-- Incidencias / Novedades -->
+    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Incidencias</p>
+        <h3 class="font-heading text-3xl font-extrabold {% if kpis.incidents > 0 %}text-rose-600{% else %}text-slate-900{% endif %} mt-1.5">{{ kpis.incidents }}</h3>
+        <p class="text-[11px] text-slate-500 mt-1">Reintentos o novedades</p>
+      </div>
+      <div class="h-12 w-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100">
+        <span class="material-symbols-outlined text-2xl">warning</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Map & Fleet Panel Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    
+    <!-- Map Overview (2 cols) -->
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden">
+      <div class="p-4 px-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div class="flex items-center gap-2.5">
+          <span class="material-symbols-outlined text-sky-600">map</span>
+          <h2 class="font-heading font-bold text-base text-slate-900">Mapa Operativo en Vivo (Cartagena)</h2>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-medium border border-emerald-200/60">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Entregados
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 font-medium border border-sky-200/60">
+            <span class="h-1.5 w-1.5 rounded-full bg-sky-500"></span> En Ruta
+          </span>
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-medium border border-amber-200/60">
+            <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Pendientes
+          </span>
+        </div>
+      </div>
+      <div id="liveDashboardMap" class="w-full h-96 z-10"></div>
+    </div>
+
+    <!-- Drivers Fleet Status (1 col) -->
+    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden">
+      <div class="p-4 px-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-slate-700">groups</span>
+          <h2 class="font-heading font-bold text-base text-slate-900">Flota de Repartidores</h2>
+        </div>
+        <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">{{ drivers|length }} Registrados</span>
+      </div>
+
+      <div class="p-4 divide-y divide-slate-100 flex-1 overflow-y-auto max-h-96 space-y-3">
+        {% for driver in drivers %}
+        <div class="pt-3 first:pt-0 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-heading font-bold text-sm border border-slate-200">
+              {{ driver.name|get_initials }}
+            </div>
+            <div>
+              <p class="text-xs font-bold text-slate-900 leading-tight">{{ driver.name }}</p>
+              <div class="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
+                <span>{{ driver.vehicle_type }} ({{ driver.vehicle_plate }})</span>
+              </div>
+            </div>
+          </div>
+          <div>
+            {% if driver.status == 'EN_RUTA' %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+              <span class="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse"></span> En Ruta
+            </span>
+            {% elif driver.status == 'DISPONIBLE' %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Disponible
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+              {{ driver.status }}
+            </span>
+            {% endif %}
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-xs text-slate-400 text-center py-6">No hay repartidores registrados en la flota.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Deliveries & Drivers Tracking Section -->
+  <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden space-y-0" id="envios-section">
+    
+    <!-- Section Header with Controls -->
+    <div class="p-5 px-6 border-b border-slate-100 bg-slate-50/70">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-sky-600 text-xl">local_shipping</span>
+            <h2 class="font-heading font-bold text-lg text-slate-900">Envíos y Paquetes Recientes</h2>
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span> Tiempo Real
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">Listado de entregas sincronizadas y estado operativo por cada repartidor de la flota</p>
+        </div>
+
+        <!-- Action Tools & Buttons -->
+        <div class="flex flex-wrap items-center gap-2.5">
+          <!-- Button: Random Assignment to All Drivers -->
+          <button id="btnRandomDistribute" 
+                  onclick="triggerRandomDistribution()" 
+                  class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-bold shadow-sm shadow-amber-500/20 transition active:scale-95 cursor-pointer"
+                  title="Distribuir y asignar aleatoriamente todos los paquetes entre todos los repartidores">
+            <span class="material-symbols-outlined text-base">casino</span>
+            <span>Reasignar Aleatoriamente</span>
+          </button>
+
+          <!-- Link to Coordinator Table View -->
+          <a href="/coordinacion" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition shadow-xs">
+            <span class="material-symbols-outlined text-sm text-sky-400">table_rows</span>
+            <span>Ver Tabla en Coordinación</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Filter Controls Bar -->
+      <div class="mt-4 pt-4 border-t border-slate-200/60 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+        
+        <!-- Driver Selector Dropdown (Lista Desplegable de Repartidores) -->
+        <div class="w-full xl:w-80">
+          <label for="driverFilterSelect" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            Filtrar por Repartidor & Ruta:
+          </label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">group</span>
+            <select id="driverFilterSelect" onchange="onDriverFilterChange(this.value)" class="w-full pl-9 pr-9 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 shadow-xs appearance-none cursor-pointer">
+              <option value="ALL">👥 Todos los Repartidores ({{ deliveries|length }} envíos totales)</option>
+              {% for ds in driver_summaries %}
+              <option value="{{ ds.driver.id }}">
+                {{ ds.driver.name }} ({{ ds.total_packages }} paquetes | {{ ds.progress_pct }}% - {{ ds.route.code|default:'Sin ruta' }})
+              </option>
+              {% endfor %}
+            </select>
+            <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg pointer-events-none">expand_more</span>
+          </div>
+        </div>
+
+        <!-- Status Filter Tabs -->
+        <div class="flex-1 min-w-0">
+          <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            Estado de Envío:
+          </label>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button type="button" onclick="setStatusFilter('ALL')" id="filterStatus_ALL" class="status-filter-btn active px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 text-white shadow-xs transition cursor-pointer">
+              Todos ({{ deliveries|length }})
+            </button>
+            <button type="button" onclick="setStatusFilter('ENTREGADO')" id="filterStatus_ENTREGADO" class="status-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 transition cursor-pointer">
+              Entregados ({{ total_delivered }})
+            </button>
+            <button type="button" onclick="setStatusFilter('EN_CAMINO')" id="filterStatus_EN_CAMINO" class="status-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-sky-700 border border-sky-200 hover:bg-sky-50 transition cursor-pointer">
+              En Ruta ({{ total_in_transit }})
+            </button>
+            <button type="button" onclick="setStatusFilter('PENDIENTE')" id="filterStatus_PENDIENTE" class="status-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-amber-700 border border-amber-200 hover:bg-amber-50 transition cursor-pointer">
+              Pendientes ({{ total_pending }})
+            </button>
+            <button type="button" onclick="setStatusFilter('INCIDENCIA')" id="filterStatus_INCIDENCIA" class="status-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-rose-700 border border-rose-200 hover:bg-rose-50 transition cursor-pointer">
+              Incidencias ({{ total_incidents }})
+            </button>
+          </div>
+        </div>
+
+        <!-- Quick Text Search -->
+        <div class="w-full xl:w-72">
+          <label for="deliverySearchInput" class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            Buscar Guía / Destino:
+          </label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base pointer-events-none">search</span>
+            <input type="text" id="deliverySearchInput" oninput="filterDeliveriesTable()" placeholder="Buscar por guía, cliente..." class="w-full pl-8 pr-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 shadow-xs">
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Active Driver & Route Status Dynamic Card (Cuadro Dinámico del Repartidor) -->
+    <div id="driverStatusPanel" class="p-5 px-6 border-b border-slate-100 bg-slate-50/30">
+      
+      <!-- ALL DRIVERS OVERVIEW (Default View) -->
+      <div id="allDriversGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {% for ds in driver_summaries %}
+        <div id="driverOverviewCard_{{ ds.driver.id }}"
+             data-driver-id="{{ ds.driver.id }}"
+             data-delivered="{{ ds.delivered_count }}"
+             data-intransit="{{ ds.in_transit_count }}"
+             data-pending="{{ ds.pending_count }}"
+             data-incidents="{{ ds.incident_count }}"
+             onclick="selectDriverFilter('{{ ds.driver.id }}')" 
+             class="driver-overview-card group cursor-pointer bg-white p-4 rounded-xl border border-slate-200/90 hover:border-sky-400 hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+             title="Haz clic para filtrar los envíos de {{ ds.driver.name }}">
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="h-9 w-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-heading font-extrabold text-xs shadow-xs">
+                  {{ ds.driver.name|get_initials }}
+                </div>
+                <div>
+                  <h4 class="font-heading font-bold text-xs text-slate-900 group-hover:text-sky-600 transition">{{ ds.driver.name }}</h4>
+                  <div class="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                    <span>{{ ds.driver.vehicle_type }} ({{ ds.driver.vehicle_plate }})</span>
+                  </div>
+                </div>
+              </div>
+              
+              <span id="driverCardRouteBadge_{{ ds.driver.id }}" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                <span class="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse"></span> En Ruta
+              </span>
+            </div>
+
+            <!-- Route Info -->
+            <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+              <span class="font-mono font-bold text-slate-700">{{ ds.route.code|default:'Sin Ruta' }}</span>
+              <span class="font-semibold text-slate-500">{{ ds.total_packages }} paquetes totales</span>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="mt-2">
+              <div class="flex items-center justify-between text-[10px] text-slate-500 font-bold mb-1">
+                <span>Avance de Ruta</span>
+                <span class="text-sky-600 font-bold">{{ ds.delivered_count }}/{{ ds.total_packages }} ({{ ds.progress_pct }}%)</span>
+              </div>
+              <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div class="bg-gradient-to-r from-sky-500 to-emerald-500 h-full rounded-full transition-all duration-500" style="width: {{ ds.progress_pct }}%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status Breakdown Mini-Pills -->
+          <div class="mt-3 pt-2 border-t border-slate-100 grid grid-cols-3 gap-1 text-[10px]">
+            <div id="pillDelivered_{{ ds.driver.id }}" 
+                 onclick="event.stopPropagation(); filterDriverAndStatus('{{ ds.driver.id }}', 'ENTREGADO')"
+                 class="card-status-pill p-1 rounded-lg text-center font-bold bg-emerald-50 text-emerald-700 border border-emerald-100/80 hover:bg-emerald-100 cursor-pointer transition-all"
+                 title="Ver los {{ ds.delivered_count }} entregados de {{ ds.driver.name }}">
+              <span class="block text-[9px] font-normal uppercase text-emerald-600">Entregados</span>
+              <span class="text-xs font-black">{{ ds.delivered_count }}</span>
+            </div>
+            <div id="pillInTransit_{{ ds.driver.id }}" 
+                 onclick="event.stopPropagation(); filterDriverAndStatus('{{ ds.driver.id }}', 'EN_CAMINO')"
+                 class="card-status-pill p-1 rounded-lg text-center font-bold bg-sky-50 text-sky-700 border border-sky-100/80 hover:bg-sky-100 cursor-pointer transition-all"
+                 title="Ver los {{ ds.in_transit_count }} en camino de {{ ds.driver.name }}">
+              <span class="block text-[9px] font-normal uppercase text-sky-600">En Ruta</span>
+              <span class="text-xs font-black">{{ ds.in_transit_count }}</span>
+            </div>
+            <div id="pillPending_{{ ds.driver.id }}" 
+                 onclick="event.stopPropagation(); filterDriverAndStatus('{{ ds.driver.id }}', 'PENDIENTE')"
+                 class="card-status-pill p-1 rounded-lg text-center font-bold bg-amber-50 text-amber-700 border border-amber-100/80 hover:bg-amber-100 cursor-pointer transition-all"
+                 title="Ver los {{ ds.pending_count }} pendientes de {{ ds.driver.name }}">
+              <span class="block text-[9px] font-normal uppercase text-amber-600">Pendientes</span>
+              <span class="text-xs font-black">{{ ds.pending_count }}</span>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- SINGLE DRIVER HIGHLIGHT CARD (Shown when specific driver is selected) -->
+      {% for ds in driver_summaries %}
+      <div id="driverCard_{{ ds.driver.id }}" class="single-driver-card hidden bg-white p-5 rounded-xl border border-sky-200/80 shadow-sm">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          
+          <!-- Driver Info -->
+          <div class="flex items-center gap-3.5">
+            <div class="h-12 w-12 rounded-2xl bg-gradient-to-tr from-slate-900 to-slate-700 text-white flex items-center justify-center font-heading font-extrabold text-base shadow-sm">
+              {{ ds.driver.name|get_initials }}
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="font-heading font-bold text-base text-slate-900">{{ ds.driver.name }}</h3>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                  <span class="material-symbols-outlined text-xs">star</span> {{ ds.driver.rating }}
+                </span>
+              </div>
+              <div class="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-500">
+                <span class="flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm text-slate-400">directions_bike</span>
+                  <b>{{ ds.driver.vehicle_type }}</b> ({{ ds.driver.vehicle_plate }})
+                </span>
+                <span>•</span>
+                <span class="flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm text-slate-400">call</span>
+                  {{ ds.driver.phone }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Route Status & Meta -->
+          <div class="flex flex-wrap items-center gap-4">
+            <div class="text-right sm:text-left">
+              <p class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Ruta Asignada</p>
+              <div class="flex items-center gap-2 mt-0.5">
+                <span class="font-mono font-bold text-sm text-slate-900">{{ ds.route.code|default:'Sin Asignar' }}</span>
+                <span class="text-xs text-slate-600 font-medium">{{ ds.route.name|default:'' }}</span>
+              </div>
+            </div>
+
+            {% if ds.route %}
+            <div>
+              {% if ds.route.status == 'EN_PROGRESO' %}
+              <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                <span class="h-2 w-2 rounded-full bg-sky-500 animate-pulse"></span> Ruta en Progreso
+              </span>
+              {% elif ds.route.status == 'FINALIZADA' %}
+              <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span class="material-symbols-outlined text-sm">verified</span> Ruta Finalizada
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">
+                {{ ds.route.status }}
+              </span>
+              {% endif %}
+            </div>
+            {% endif %}
+
+            {% if ds.route %}
+            <a href="/repartidor/ruta-activa?route_id={{ ds.route.id }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition shadow-xs">
+              <span class="material-symbols-outlined text-sm text-sky-400">smartphone</span>
+              <span>Ver App Móvil</span>
+            </a>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Driver Progress Metrics Bar -->
+        <div class="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+          <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+            <p class="text-[10px] uppercase font-bold text-slate-400">Total Envíos</p>
+            <p class="text-base font-extrabold text-slate-900 mt-0.5">{{ ds.total_packages }}</p>
+          </div>
+          <div class="bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-100">
+            <p class="text-[10px] uppercase font-bold text-emerald-700">Entregados</p>
+            <p class="text-base font-extrabold text-emerald-600 mt-0.5">{{ ds.delivered_count }}</p>
+          </div>
+          <div class="bg-sky-50/60 p-2.5 rounded-xl border border-sky-100">
+            <p class="text-[10px] uppercase font-bold text-sky-700">En Tránsito</p>
+            <p class="text-base font-extrabold text-sky-600 mt-0.5">{{ ds.in_transit_count }}</p>
+          </div>
+          <div class="bg-amber-50/60 p-2.5 rounded-xl border border-amber-100">
+            <p class="text-[10px] uppercase font-bold text-amber-700">Pendientes</p>
+            <p class="text-base font-extrabold text-amber-600 mt-0.5">{{ ds.pending_count }}</p>
+          </div>
+        </div>
+
+        <!-- Progress bar row -->
+        <div class="mt-3">
+          <div class="flex items-center justify-between text-xs font-bold text-slate-600 mb-1">
+            <span>Avance de Entregas de la Ruta:</span>
+            <span class="text-sky-600">{{ ds.delivered_count }} de {{ ds.total_packages }} completados ({{ ds.progress_pct }}%)</span>
+          </div>
+          <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+            <div class="bg-gradient-to-r from-sky-500 to-emerald-500 h-full rounded-full transition-all duration-500" style="width: {{ ds.progress_pct }}%;"></div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+    </div>
+
+    <!-- VIEW: GROUPED REPARTIDORES ACCORDION / CARDS VIEW (Hidden by default, shown ONLY when a driver is clicked) -->
+    <div id="deliveriesCardsView" class="p-6 space-y-4">
+      
+      <!-- Prompt shown when NO specific driver is selected -->
+      <div id="driverSelectPrompt" class="p-8 text-center bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 space-y-2">
+        <div class="h-12 w-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mx-auto shadow-xs">
+          <span class="material-symbols-outlined text-2xl animate-bounce">touch_app</span>
+        </div>
+        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Selecciona un Repartidor Arriba</h4>
+        <p class="text-[11px] text-slate-500 max-w-md mx-auto">Haz clic en la tarjeta o nombre de cualquier repartidor (José, Sergio, Juan) para desplegar exclusivamente su lista de 10 entregas asignadas y ruta activa.</p>
+      </div>
+
+      {% for ds in driver_summaries %}
+      <div class="driver-accordion-card bg-slate-50/50 rounded-2xl border border-slate-200/90 overflow-hidden shadow-xs" data-driver-id="{{ ds.driver.id }}" style="display: none;">
+        
+        <!-- Accordion Header -->
+        <div class="p-4 px-6 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer select-none hover:bg-slate-50/80 transition"
+             onclick="toggleDriverAccordion('accBody_{{ ds.driver.id }}', 'accIcon_{{ ds.driver.id }}')">
+          
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-heading font-extrabold text-sm shadow-xs">
+              {{ ds.driver.name|get_initials }}
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="font-heading font-bold text-sm text-slate-900">{{ ds.driver.name }}</h3>
+                <span class="text-[11px] font-semibold text-slate-500">({{ ds.driver.vehicle_type }} - {{ ds.driver.vehicle_plate }})</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                <span class="font-mono font-bold text-slate-700">{{ ds.route.code|default:'Sin Ruta' }}</span>
+                <span>•</span>
+                <span>{{ ds.route.name|default:'' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <!-- Progress Pill -->
+            <div class="text-right">
+              <span class="text-xs font-bold text-slate-700">{{ ds.delivered_count }}/{{ ds.total_packages }} Entregados</span>
+              <div class="w-28 bg-slate-100 h-1.5 rounded-full overflow-hidden mt-1">
+                <div class="bg-gradient-to-r from-sky-500 to-emerald-500 h-full rounded-full" style="width: {{ ds.progress_pct }}%;"></div>
+              </div>
+            </div>
+
+            <!-- Route Status Badge -->
+            {% if ds.route and ds.route.status == 'EN_PROGRESO' %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200">
+              <span class="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse"></span> En Ruta
+            </span>
+            {% elif ds.route and ds.route.status == 'FINALIZADA' %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Finalizada
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
+              Disponible
+            </span>
+            {% endif %}
+
+            <span id="accIcon_{{ ds.driver.id }}" class="material-symbols-outlined text-slate-400 text-xl transition-transform duration-200">expand_more</span>
+          </div>
+
+        </div>
+
+        <!-- Accordion Body (Collapsible list of assigned packages) -->
+        <div id="accBody_{{ ds.driver.id }}" class="divide-y divide-slate-100 border-t border-slate-100 bg-white">
+          {% for stop in ds.stops %}
+          <div class="driver-stop-item p-4 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 transition"
+               data-stop-status="{{ stop.status|default:stop.delivery.status }}"
+               data-stop-search="{{ stop.delivery.tracking_code|lower }} {{ stop.delivery.recipient_name|lower }} {{ stop.delivery.address|lower }} {{ stop.delivery.neighborhood|lower }}">
+            
+            <div class="flex items-center gap-3">
+              <span class="h-6 w-6 rounded-full bg-slate-100 text-slate-700 inline-flex items-center justify-center font-bold text-xs shrink-0">
+                {{ stop.sequence_order }}
+              </span>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-mono font-bold text-xs text-slate-900">{{ stop.delivery.tracking_code }}</span>
+                  <span class="text-xs font-semibold text-slate-800">{{ stop.delivery.recipient_name }}</span>
+                  <span class="text-[10px] text-slate-400">({{ stop.delivery.package_type|replace_underscore }} - {{ stop.delivery.weight_kg }} kg)</span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <span class="material-symbols-outlined text-xs text-sky-600">location_on</span>
+                  <span>{{ stop.delivery.address }} ({{ stop.delivery.neighborhood }})</span>
+                  {% if stop.delivery.latitude == 0 or not stop.delivery.delivery_point %}
+                  <span class="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200" title="Pendiente georreferenciar en campo">📍 Sin GPS Previo</span>
+                  {% endif %}
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 self-end sm:self-center">
+              <span class="text-[11px] font-medium text-slate-400">Est. {{ stop.estimated_arrival|default:'N/A' }}</span>
+              {% if stop.status == 'COMPLETADO' or stop.delivery.status == 'ENTREGADO' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span class="material-symbols-outlined text-xs">check_circle</span> Entregado
+              </span>
+              {% elif stop.status == 'EN_CAMINO' or stop.delivery.status == 'EN_CAMINO' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                <span class="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse"></span> En Camino
+              </span>
+              {% elif stop.status == 'INCIDENCIA' or stop.delivery.status == 'INCIDENCIA' %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                <span class="material-symbols-outlined text-xs">warning</span> Incidencia
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600">
+                Asignado
+              </span>
+              {% endif %}
+            </div>
+
+          </div>
+          {% empty %}
+          <p class="p-6 text-center text-xs text-slate-400">Este repartidor no tiene paquetes asignados en su ruta actual.</p>
+          {% endfor %}
+        </div>
+
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Section Footer / Summary -->
+    <div class="p-4 px-6 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500">
+      <div id="resultsCountSummary">
+        Mostrando <span class="font-bold text-slate-800" id="visibleCount">{{ deliveries|length }}</span> de <span class="font-bold text-slate-800">{{ deliveries|length }}</span> envíos sincronizados
+      </div>
+      <div class="flex items-center gap-4 text-[11px]">
+        <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span> Entregado</span>
+        <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-sky-500"></span> En Camino</span>
+        <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-blue-500"></span> Asignado</span>
+        <span class="flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-rose-500"></span> Incidencia</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastNotification" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900 text-white shadow-2xl border border-slate-700 text-xs font-semibold">
+    <span class="material-symbols-outlined text-emerald-400 text-xl" id="toastIcon">check_circle</span>
+    <span id="toastMessage">Operación realizada con éxito</span>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Estado global de filtros en el Dashboard
+  let currentDriverFilter = 'ALL';
+  let currentStatusFilter = 'ALL';
+  let currentSearchQuery = '';
+
+  // Toast Helper
+  function showToast(message, icon = 'check_circle', isError = false) {
+    const toast = document.getElementById('toastNotification');
+    const msgEl = document.getElementById('toastMessage');
+    const iconEl = document.getElementById('toastIcon');
+
+    msgEl.textContent = message;
+    iconEl.textContent = icon;
+    iconEl.className = `material-symbols-outlined text-xl ${isError ? 'text-rose-400' : 'text-emerald-400'}`;
+
+    toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+    toast.classList.add('translate-y-0', 'opacity-100');
+
+    setTimeout(() => {
+      toast.classList.remove('translate-y-0', 'opacity-100');
+      toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+    }, 4000);
+  }
+
+  // Filtrado combinado de conductor y estado (usado en las pastillas de cada tarjeta)
+  function filterDriverAndStatus(driverId, status) {
+    const selectEl = document.getElementById('driverFilterSelect');
+    if (selectEl) selectEl.value = driverId;
+    currentDriverFilter = driverId;
+    updateDriverStatusPanel(driverId);
+    setStatusFilter(status);
+  }
+
+  // Filtrado de Repartidores desde el Dropdown
+  function onDriverFilterChange(driverId) {
+    currentDriverFilter = driverId;
+    
+    // Sincronizar select si la llamada vino de una tarjeta
+    const selectEl = document.getElementById('driverFilterSelect');
+    if (selectEl && selectEl.value !== driverId) {
+      selectEl.value = driverId;
+    }
+
+    updateDriverStatusPanel(driverId);
+    updateStatusTabCounts();
+    filterAccordionDeliveries();
+
+    // Scroll suave hacia la sección de entregas si se seleccionó un conductor
+    if (driverId !== 'ALL') {
+      const targetCard = document.querySelector(`.driver-accordion-card[data-driver-id="${driverId}"]`);
+      if (targetCard) {
+        setTimeout(() => {
+          targetCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 80);
+      }
+    }
+  }
+
+  // Recalcular contadores de las pestañas de estado según el repartidor seleccionado
+  function updateStatusTabCounts() {
+    let countAll = 0;
+    let countDelivered = 0;
+    let countInTransit = 0;
+    let countPending = 0;
+    let countIncidents = 0;
+
+    const accCards = document.querySelectorAll('.driver-accordion-card');
+    accCards.forEach(card => {
+      const cardDriverId = (card.getAttribute('data-driver-id') || '0').trim();
+      if (currentDriverFilter === 'ALL' || currentDriverFilter === cardDriverId) {
+        const stops = card.querySelectorAll('.driver-stop-item');
+        stops.forEach(stop => {
+          countAll++;
+          const stopStatus = (stop.getAttribute('data-stop-status') || '').trim().toUpperCase();
+          if (stopStatus === 'COMPLETADO' || stopStatus === 'ENTREGADO') countDelivered++;
+          else if (stopStatus === 'EN_CAMINO') countInTransit++;
+          else if (stopStatus === 'PENDIENTE' || stopStatus === 'ASIGNADO' || stopStatus === 'EN_ESPERA') countPending++;
+          else if (stopStatus === 'INCIDENCIA') countIncidents++;
+        });
+      }
+    });
+
+    const btnAll = document.getElementById('filterStatus_ALL');
+    const btnDel = document.getElementById('filterStatus_ENTREGADO');
+    const btnInT = document.getElementById('filterStatus_EN_CAMINO');
+    const btnPen = document.getElementById('filterStatus_PENDIENTE');
+    const btnInc = document.getElementById('filterStatus_INCIDENCIA');
+
+    if (btnAll) btnAll.textContent = `Todos (${countAll})`;
+    if (btnDel) btnDel.textContent = `Entregados (${countDelivered})`;
+    if (btnInT) btnInT.textContent = `En Ruta (${countInTransit})`;
+    if (btnPen) btnPen.textContent = `Pendientes (${countPending})`;
+    if (btnInc) btnInc.textContent = `Incidencias (${countIncidents})`;
+  }
+
+  // Selección de conductor desde las tarjetas de resumen
+  function selectDriverFilter(driverId) {
+    if (currentDriverFilter === driverId) {
+      onDriverFilterChange('ALL');
+    } else {
+      onDriverFilterChange(driverId);
+    }
+  }
+
+  // Actualizar el Panel Superior del Repartidor
+  function updateDriverStatusPanel(driverId) {
+    const overviewCards = document.querySelectorAll('.driver-overview-card');
+
+    overviewCards.forEach(card => {
+      const cardId = card.getAttribute('data-driver-id');
+      if (driverId === 'ALL') {
+        card.classList.remove('ring-2', 'ring-sky-500', 'border-sky-500', 'bg-sky-50/25', 'opacity-60');
+        card.classList.add('border-slate-200/90', 'bg-white');
+      } else if (cardId === driverId) {
+        card.classList.add('ring-2', 'ring-sky-500', 'border-sky-500', 'bg-sky-50/25');
+        card.classList.remove('border-slate-200/90', 'opacity-60');
+      } else {
+        card.classList.remove('ring-2', 'ring-sky-500', 'border-sky-500', 'bg-sky-50/25');
+        card.classList.add('border-slate-200/90', 'opacity-60');
+      }
+    });
+
+    const driverBadge = document.getElementById('activeDriverBadge');
+    if (driverBadge) {
+      if (driverId === 'ALL') {
+        driverBadge.textContent = '👥 Todos los Repartidores (4)';
+        driverBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-800 border border-sky-200';
+      } else {
+        const selOption = document.querySelector(`#driverFilterSelect option[value="${driverId}"]`);
+        const driverName = selOption ? selOption.textContent.split('(')[0].trim() : `Repartidor #${driverId}`;
+        driverBadge.textContent = `👤 ${driverName}`;
+        driverBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200';
+      }
+    }
+  }
+
+  // Filtrado por Estado (Pestañas)
+  function setStatusFilter(status) {
+    currentStatusFilter = status;
+    
+    // Actualizar estilos de los botones de pestañas
+    const btnAll = document.getElementById('filterStatus_ALL');
+    const btnDel = document.getElementById('filterStatus_ENTREGADO');
+    const btnInT = document.getElementById('filterStatus_EN_CAMINO');
+    const btnPen = document.getElementById('filterStatus_PENDIENTE');
+    const btnInc = document.getElementById('filterStatus_INCIDENCIA');
+
+    if (btnAll) btnAll.className = (status === 'ALL')
+      ? 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-black bg-slate-900 text-white shadow-md transition-all cursor-pointer ring-2 ring-slate-900/20'
+      : 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition-all cursor-pointer';
+
+    if (btnDel) btnDel.className = (status === 'ENTREGADO')
+      ? 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-black bg-emerald-600 text-white shadow-md transition-all cursor-pointer ring-2 ring-emerald-500/30'
+      : 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50 transition-all cursor-pointer';
+
+    if (btnInT) btnInT.className = (status === 'EN_CAMINO')
+      ? 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-black bg-sky-600 text-white shadow-md transition-all cursor-pointer ring-2 ring-sky-500/30'
+      : 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-sky-700 border border-sky-200 hover:bg-sky-50 transition-all cursor-pointer';
+
+    if (btnPen) btnPen.className = (status === 'PENDIENTE')
+      ? 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-black bg-amber-500 text-white shadow-md transition-all cursor-pointer ring-2 ring-amber-400/30'
+      : 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-amber-700 border border-amber-200 hover:bg-amber-50 transition-all cursor-pointer';
+
+    if (btnInc) btnInc.className = (status === 'INCIDENCIA')
+      ? 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-black bg-rose-600 text-white shadow-md transition-all cursor-pointer ring-2 ring-rose-500/30'
+      : 'status-filter-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-rose-700 border border-rose-200 hover:bg-rose-50 transition-all cursor-pointer';
+
+    updateDriverCardsStatusHighlights(status);
+    filterAccordionDeliveries();
+  }
+
+  // Resaltado dinámico en las 4 tarjetas de los repartidores según el estado activo
+  function updateDriverCardsStatusHighlights(status) {
+    const cards = document.querySelectorAll('.driver-overview-card');
+    cards.forEach(card => {
+      const driverId = card.getAttribute('data-driver-id');
+      const pillDel = document.getElementById(`pillDelivered_${driverId}`);
+      const pillInT = document.getElementById(`pillInTransit_${driverId}`);
+      const pillPen = document.getElementById(`pillPending_${driverId}`);
+
+      // Estilo base
+      if (pillDel) pillDel.className = 'card-status-pill p-1 rounded-lg text-center font-bold bg-emerald-50 text-emerald-700 border border-emerald-100/80 hover:bg-emerald-100 cursor-pointer transition-all';
+      if (pillInT) pillInT.className = 'card-status-pill p-1 rounded-lg text-center font-bold bg-sky-50 text-sky-700 border border-sky-100/80 hover:bg-sky-100 cursor-pointer transition-all';
+      if (pillPen) pillPen.className = 'card-status-pill p-1 rounded-lg text-center font-bold bg-amber-50 text-amber-700 border border-amber-100/80 hover:bg-amber-100 cursor-pointer transition-all';
+
+      // Resaltado de la métrica activa
+      if (status === 'ENTREGADO' && pillDel) {
+        pillDel.className = 'card-status-pill p-1 rounded-lg text-center font-black bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400 scale-105 cursor-pointer transition-all';
+      } else if (status === 'EN_CAMINO' && pillInT) {
+        pillInT.className = 'card-status-pill p-1 rounded-lg text-center font-black bg-sky-600 text-white shadow-md ring-2 ring-sky-400 scale-105 cursor-pointer transition-all';
+      } else if (status === 'PENDIENTE' && pillPen) {
+        pillPen.className = 'card-status-pill p-1 rounded-lg text-center font-black bg-amber-500 text-white shadow-md ring-2 ring-amber-300 scale-105 cursor-pointer transition-all';
+      }
+    });
+  }
+
+  // Filtrar acordeones y paradas en la vista de tarjetas de Repartidores
+  function filterAccordionDeliveries() {
+    const searchInput = document.getElementById('deliverySearchInput');
+    const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
+
+    const placeholderPrompt = document.getElementById('driverSelectPrompt');
+    const accCards = document.querySelectorAll('.driver-accordion-card');
+    const resultsSummaryEl = document.getElementById('resultsCountSummary');
+
+    if (currentDriverFilter === 'ALL') {
+      // Ocultar todas las listas de envíos cuando no hay ningún repartidor seleccionado
+      accCards.forEach(card => {
+        card.style.display = 'none';
+      });
+      if (placeholderPrompt) placeholderPrompt.classList.remove('hidden');
+      if (resultsSummaryEl) {
+        resultsSummaryEl.innerHTML = `Mostrando <span class="font-bold text-slate-800">{{ deliveries|length }}</span> envíos totales de la flota • <i>Haz clic en un repartidor arriba para ver su lista de entregas</i>`;
+      }
+      return;
+    }
+
+    // Si hay un repartidor seleccionado, ocultar el prompt de selección
+    if (placeholderPrompt) placeholderPrompt.classList.add('hidden');
+
+    let totalVisibleForDriver = 0;
+
+    accCards.forEach(card => {
+      const cardDriverId = card.getAttribute('data-driver-id');
+      const isSelectedDriver = (currentDriverFilter === cardDriverId);
+
+      if (!isSelectedDriver) {
+        card.style.display = 'none';
+        return;
+      }
+
+      // Mostrar exclusivamente el acordeón del repartidor seleccionado
+      card.style.display = '';
+
+      // Asegurar que el cuerpo del acordeón esté desplegado
+      const body = document.getElementById(`accBody_${cardDriverId}`);
+      const icon = document.getElementById(`accIcon_${cardDriverId}`);
+      if (body) body.classList.remove('hidden');
+      if (icon) icon.style.transform = 'rotate(0deg)';
+
+      const stops = card.querySelectorAll('.driver-stop-item');
+
+      stops.forEach(stop => {
+        const stopStatus = (stop.getAttribute('data-stop-status') || '').toUpperCase();
+        const stopSearch = (stop.getAttribute('data-stop-search') || '').toLowerCase();
+
+        let matchStatus = true;
+        if (currentStatusFilter === 'ENTREGADO') {
+          matchStatus = (stopStatus === 'COMPLETADO' || stopStatus === 'ENTREGADO');
+        } else if (currentStatusFilter === 'EN_CAMINO') {
+          matchStatus = (stopStatus === 'EN_CAMINO');
+        } else if (currentStatusFilter === 'PENDIENTE' || currentStatusFilter === 'ASIGNADO') {
+          matchStatus = (stopStatus === 'PENDIENTE' || stopStatus === 'ASIGNADO' || stopStatus === 'EN_ESPERA');
+        } else if (currentStatusFilter === 'INCIDENCIA') {
+          matchStatus = (stopStatus === 'INCIDENCIA');
+        }
+
+        const matchSearch = (!query || stopSearch.includes(query));
+
+        if (matchStatus && matchSearch) {
+          stop.style.display = '';
+          totalVisibleForDriver++;
+        } else {
+          stop.style.display = 'none';
+        }
+      });
+    });
+
+    if (resultsSummaryEl) {
+      const selOption = document.querySelector(`#driverFilterSelect option[value="${currentDriverFilter}"]`);
+      const driverName = selOption ? selOption.textContent.split('(')[0].trim() : 'Repartidor';
+      resultsSummaryEl.innerHTML = `Mostrando <span class="font-bold text-slate-800">${totalVisibleForDriver}</span> envíos de <span class="font-bold text-sky-700">${driverName}</span>`;
+    }
+  }
+
+  // Toggle de Acordeón
+  function toggleDriverAccordion(bodyId, iconId) {
+    const body = document.getElementById(bodyId);
+    const icon = document.getElementById(iconId);
+    if (!body || !icon) return;
+
+    if (body.classList.contains('hidden')) {
+      body.classList.remove('hidden');
+      icon.style.transform = 'rotate(0deg)';
+    } else {
+      body.classList.add('hidden');
+      icon.style.transform = 'rotate(-90deg)';
+    }
+  }
+
+  // Reset de Filtros
+  function resetDeliveryFilters() {
+    currentDriverFilter = 'ALL';
+    currentStatusFilter = 'ALL';
+    const selectEl = document.getElementById('driverFilterSelect');
+    if (selectEl) selectEl.value = 'ALL';
+    const searchEl = document.getElementById('deliverySearchInput');
+    if (searchEl) searchEl.value = '';
+
+    setStatusFilter('ALL');
+    updateDriverStatusPanel('ALL');
+    updateStatusTabCounts();
+    filterAccordionDeliveries();
+  }
+
+  // Trigger Asignación Aleatoria a Todos los Repartidores
+  async function triggerRandomDistribution() {
+    const btn = document.getElementById('btnRandomDistribute');
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="material-symbols-outlined text-base animate-spin">refresh</span><span>Asignando...</span>`;
+
+    try {
+      const response = await fetch('/api/routes/distribute-random', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        showToast(data.message || '¡Envíos distribuidos aleatoriamente a todos los repartidores!', 'casino');
+        // Recargar página después de 1 segundo para mostrar todos los datos frescos
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      } else {
+        showToast(data.detail || 'Ocurrió un error al reasignar envíos', 'error', true);
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error de conexión con el servidor', 'error', true);
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+
+  // Inicialización del Mapa Operativo en Vivo con Leaflet
+  document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar estado de acordeones (ocultos por defecto hasta hacer clic en un repartidor)
+    filterAccordionDeliveries();
+
+    const defaultLat = {{ settings.DEFAULT_LAT|default:'10.4075' }};
+    const defaultLng = {{ settings.DEFAULT_LNG|default:'-75.5342' }};
+    const map = L.map('liveDashboardMap').setView([defaultLat, defaultLng], 13);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    // Centro Logístico Depósito (Manga)
+    const depotIcon = L.divIcon({
+      className: 'custom-depot-icon',
+      html: `<div class="h-8 w-8 bg-slate-900 text-white rounded-xl shadow-lg flex items-center justify-center border-2 border-white"><span class="material-symbols-outlined text-sm text-sky-400">warehouse</span></div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+    L.marker([10.4075, -75.5342], { icon: depotIcon })
+      .addTo(map)
+      .bindPopup("<b>Centro Logístico Principal GTR</b><br>Manga, Cartagena");
+
+    // Puntos de entrega
+    const deliveries = [
+      {% for d in deliveries %}
+      {
+        id: {{ d.id }},
+        code: "{{ d.tracking_code }}",
+        recipient: "{{ d.recipient_name }}",
+        address: "{{ d.address }}",
+        lat: {{ d.latitude|unlocalize }},
+        lng: {{ d.longitude|unlocalize }},
+        status: "{{ d.status }}",
+        priority: "{{ d.priority }}"
+      },
+      {% endfor %}
+    ];
+
+    deliveries.forEach(d => {
+      // Omitir en el mapa interactivo los envíos sin coordenadas GPS válidas
+      if (!d.lat || !d.lng || Math.abs(d.lat) < 1.0 || Math.abs(d.lng) < 1.0) return;
+
+      let colorClass = 'bg-amber-500';
+      if (d.status === 'ENTREGADO') colorClass = 'bg-emerald-500';
+      else if (d.status === 'EN_CAMINO' || d.status === 'ASIGNADO') colorClass = 'bg-sky-500';
+      else if (d.status === 'INCIDENCIA') colorClass = 'bg-rose-500';
+
+      const pointIcon = L.divIcon({
+        className: 'custom-del-icon',
+        html: `<div class="h-6 w-6 ${colorClass} text-white rounded-full shadow-md flex items-center justify-center border-2 border-white text-[10px] font-bold"><span class="material-symbols-outlined text-xs">package_2</span></div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+
+      L.marker([d.lat, d.lng], { icon: pointIcon })
+        .addTo(map)
+        .bindPopup(`<b>${d.code}</b><br>${d.recipient}<br><span class="text-xs text-slate-500">${d.address}</span><br><b>Estado:</b> ${d.status}`);
+    });
+
+    // Puntos de repartidores en vivo
+    const drivers = [
+      {% for drv in drivers %}
+      {% if drv.current_lat and drv.current_lng %}
+      {
+        name: "{{ drv.name }}",
+        vehicle: "{{ drv.vehicle_type }}",
+        plate: "{{ drv.vehicle_plate }}",
+        status: "{{ drv.status }}",
+        lat: {{ drv.current_lat|unlocalize }},
+        lng: {{ drv.current_lng|unlocalize }}
+      },
+      {% endif %}
+      {% endfor %}
+    ];
+
+    drivers.forEach(drv => {
+      const driverIcon = L.divIcon({
+        className: 'driver-marker-pulse',
+        html: `<div class="h-8 w-8 bg-sky-600 text-white rounded-full shadow-xl flex items-center justify-center border-2 border-white"><span class="material-symbols-outlined text-sm">moped</span></div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+
+      L.marker([drv.lat, drv.lng], { icon: driverIcon })
+        .addTo(map)
+        .bindPopup(`<b>Repartidor: ${drv.name}</b><br>${drv.vehicle} (${drv.plate})<br><b>Estado:</b> ${drv.status}`);
+    });
+  });
+</script>
+{% endblock %}

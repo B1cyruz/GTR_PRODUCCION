@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+  <title>GTR - App Repartidor & GPS Móvil</title>
+  
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  
+  <!-- Google Fonts & Material Symbols -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+  
+  <!-- Leaflet Maps CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+    h1, h2, h3, .font-heading { font-family: 'Hanken Grotesk', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen pb-24">
+
+  <!-- Mobile Top Bar -->
+  <header class="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800 px-4 py-3.5 flex items-center justify-between shadow-lg">
+    <div class="flex items-center gap-3">
+      {% if current_user and current_user.role in ['ROOT', 'COORDINADOR'] %}
+      <a href="/dashboard" class="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white" title="Volver al Panel">
+        <span class="material-symbols-outlined text-xl">arrow_back</span>
+      </a>
+      {% endif %}
+      <div>
+        <div class="flex items-center gap-1.5">
+          <span class="font-heading font-extrabold text-sm text-white">GTR Móvil</span>
+          <span class="px-1.5 py-0.2 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">REPARTIDOR</span>
+        </div>
+        <p class="text-[11px] text-slate-400">{{ route.code if route else 'Modo Operativo' }}</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <div class="text-right hidden sm:block">
+        <p class="text-xs font-bold text-slate-200 truncate max-w-[130px]">{{ current_user.full_name if current_user else (driver.name if driver else 'Conductor') }}</p>
+        <p class="text-[9px] text-emerald-400 font-semibold">🏍️ {{ current_user.role }}</p>
+      </div>
+      <div class="h-8 w-8 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center border border-emerald-400/40 shadow-xs">
+        {{ (current_user.full_name if current_user else (driver.name if driver else 'CO'))[:2]|upper }}
+      </div>
+      <!-- Logout -->
+      <a href="/logout" 
+         title="Cerrar Sesión" 
+         class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 hover:text-white text-xs font-bold transition shadow-xs">
+        <span class="material-symbols-outlined text-base">logout</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Mobile Container -->
+  <main class="max-w-md mx-auto p-4 space-y-4">
+
+    <!-- PRIORITY ACTION: REGISTRAR PUNTO GPS -->
+    <div class="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl p-4 shadow-xl text-white space-y-2.5">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center text-white backdrop-blur-xs">
+            <span class="material-symbols-outlined text-xl">add_location_alt</span>
+          </div>
+          <div>
+            <h3 class="font-heading font-extrabold text-sm text-white">Capturar Ubicación GPS</h3>
+            <p class="text-[11px] text-emerald-100">Guarda en la Base General del Sistema</p>
+          </div>
+        </div>
+      </div>
+      <button onclick="startGPSRegistrationFlow()" class="w-full py-3 rounded-xl bg-white text-emerald-950 font-heading font-black text-xs hover:bg-emerald-50 transition flex items-center justify-center gap-2 shadow-lg cursor-pointer">
+        <span class="material-symbols-outlined text-lg text-emerald-700">my_location</span>
+        <span>REGISTRAR PUNTO DE ENTREGA</span>
+      </button>
+    </div>
+
+    {% if route %}
+    <!-- Route Progress Header Card -->
+    <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-xl space-y-3">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-sky-400">Ruta Asignada</span>
+          <h2 class="font-heading font-extrabold text-base text-white">{{ route.name }}</h2>
+        </div>
+        <div class="text-right">
+          <span class="font-heading font-extrabold text-xl text-emerald-400">{{ route.completed_stops }} / {{ route.total_stops }}</span>
+          <p class="text-[10px] text-slate-400">Entregados</p>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden">
+        {% set progress_pct = (route.completed_stops / (route.total_stops or 1)) * 100 %}
+        <div class="bg-gradient-to-r from-sky-500 to-emerald-400 h-full rounded-full transition-all duration-500" style="width: {{ progress_pct }}%"></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-1 text-xs text-slate-300">
+        <div class="flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm text-sky-400">near_me</span>
+          <span>{{ route.total_distance_km }} km</span>
+        </div>
+        <div class="flex items-center gap-1.5 justify-end">
+          <span class="material-symbols-outlined text-sm text-amber-400">schedule</span>
+          <span>{{ route.estimated_duration_min }} min est.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Stops List (Step by Step) -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between px-1">
+        <h3 class="font-heading font-bold text-xs uppercase tracking-wider text-slate-400">Secuencia de Entregas</h3>
+        <span class="text-[11px] text-slate-500 font-medium">{{ stops|length }} paradas</span>
+      </div>
+
+      {% for stop in stops %}
+      <div id="stop-card-{{ stop.id }}" class="bg-slate-800/90 border {% if stop.status == 'COMPLETADO' %}border-emerald-500/40 bg-emerald-950/15{% elif stop.status == 'EN_CAMINO' %}border-sky-500 bg-sky-950/25 ring-2 ring-sky-500/30{% elif stop.status == 'INCIDENCIA' %}border-rose-500/40 bg-rose-950/15{% else %}border-slate-700/80{% endif %} rounded-2xl p-4 shadow-lg transition-all space-y-3">
+        
+        <!-- Stop Header -->
+        <div class="flex items-start justify-between gap-2 border-b border-slate-700/60 pb-2.5">
+          <div class="flex items-center gap-2.5">
+            <div class="h-8 w-8 rounded-xl {% if stop.status == 'COMPLETADO' %}bg-emerald-500 text-white{% elif stop.status == 'EN_CAMINO' %}bg-sky-500 text-white animate-pulse shadow-md shadow-sky-500/30{% elif stop.status == 'INCIDENCIA' %}bg-rose-500 text-white{% else %}bg-slate-700 text-slate-300{% endif %} flex items-center justify-center font-heading font-black text-xs shrink-0">
+              {% if stop.status == 'COMPLETADO' %}
+              <span class="material-symbols-outlined text-base">check</span>
+              {% else %}
+              #{{ stop.sequence_order }}
+              {% endif %}
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <!-- ID de Envío -->
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-black bg-sky-500/20 text-sky-300 border border-sky-500/40 font-mono">
+                  ID #{{ stop.delivery.id }}
+                </span>
+                <!-- Guía Tracking -->
+                <span class="text-xs font-mono font-bold text-slate-300">
+                  {{ stop.delivery.tracking_code }}
+                </span>
+              </div>
+              <h4 class="font-bold text-sm text-white mt-0.5 leading-tight">{{ stop.delivery.recipient_name }}</h4>
+            </div>
+          </div>
+
+          <!-- Badges: Prioridad y Estado -->
+          <div class="flex flex-col items-end gap-1 shrink-0">
+            <!-- Prioridad -->
+            {% if stop.delivery.priority == 'ALTA' %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-500/25 text-rose-300 border border-rose-500/40 shadow-xs">
+              <span class="material-symbols-outlined text-xs">local_fire_department</span>
+              <span>ALTA</span>
+            </span>
+            {% elif stop.delivery.priority == 'MEDIA' %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              <span class="material-symbols-outlined text-xs">bolt</span>
+              <span>MEDIA</span>
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-700/80 text-slate-400 border border-slate-600">
+              <span>BAJA</span>
+            </span>
+            {% endif %}
+
+            <!-- Estado de la Parada -->
+            {% if stop.status == 'COMPLETADO' %}
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Entregado</span>
+            {% elif stop.status == 'EN_CAMINO' %}
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30 animate-pulse">En Camino</span>
+            {% elif stop.status == 'INCIDENCIA' %}
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">Incidencia</span>
+            {% else %}
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-700 text-slate-400">Pendiente</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Tipo de Paquete & Características del Envío -->
+        <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-700/70 text-xs">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-[11px] text-slate-400 font-medium">Paquete:</span>
+            {% if stop.delivery.package_type == 'DOCUMENTO' %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold text-[11px]">
+              <span class="material-symbols-outlined text-sm">description</span>
+              <span>Documento</span>
+            </span>
+            {% elif stop.delivery.package_type == 'REFRIGERADO' %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold text-[11px]">
+              <span class="material-symbols-outlined text-sm">ac_unit</span>
+              <span>Refrigerado</span>
+            </span>
+            {% elif stop.delivery.package_type == 'VOLUMINOSO' %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold text-[11px]">
+              <span class="material-symbols-outlined text-sm">package_2</span>
+              <span>Caja Voluminosa</span>
+            </span>
+            {% elif stop.delivery.package_type == 'PAQUETE_PEQUEÑO' %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[11px]">
+              <span class="material-symbols-outlined text-sm">inventory_2</span>
+              <span>Caja Pequeña</span>
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-[11px]">
+              <span class="material-symbols-outlined text-sm">inventory_2</span>
+              <span>Caja / Paquete ({{ stop.delivery.package_type|replace('_', ' ') }})</span>
+            </span>
+            {% endif %}
+          </div>
+
+          <div class="text-[11px] font-semibold text-slate-300 shrink-0">
+            ⚖️ {{ stop.delivery.weight_kg }} kg
+          </div>
+        </div>
+
+        {% set place_name = stop.delivery.delivery_point.name if stop.delivery.delivery_point else (stop.delivery.client.name if stop.delivery.client else '') %}
+        {% set place_phone = (stop.delivery.delivery_point.client.phone if (stop.delivery.delivery_point and stop.delivery.delivery_point.client and stop.delivery.delivery_point.client.phone) else (stop.delivery.client.phone if (stop.delivery.client and stop.delivery.client.phone) else '')) %}
+
+        <!-- Address, Location & Contact Details -->
+        <div class="bg-slate-900/70 p-3 rounded-2xl border border-slate-700/60 text-xs space-y-2.5">
+          <!-- Lugar / Establecimiento & Dirección -->
+          <div class="flex items-start gap-2 text-slate-200">
+            <span class="material-symbols-outlined text-base text-sky-400 shrink-0 mt-0.5">location_on</span>
+            <div class="flex-1 min-w-0">
+              {% if place_name %}
+              <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+                <span class="font-bold text-amber-300 text-xs flex items-center gap-1">
+                  🏢 {{ place_name }}
+                </span>
+                {% if stop.delivery.delivery_point %}
+                <span class="text-[9px] font-bold text-emerald-400 bg-emerald-950/70 px-1.5 py-0.2 rounded border border-emerald-500/30">Punto GPS</span>
+                {% endif %}
+              </div>
+              {% endif %}
+              <span class="font-medium text-white block">{{ stop.delivery.address }}</span>
+              <span class="text-slate-400 block text-[11px]">Barrio: <b class="text-slate-300">{{ stop.delivery.neighborhood or 'Cartagena' }}</b></span>
+              {% if stop.delivery.reference_point %}
+              <span class="text-amber-300/90 block text-[10px] mt-0.5">📍 Ref: {{ stop.delivery.reference_point }}</span>
+              {% endif %}
+
+              <!-- Fotografía de Referencia de la Fachada/Sitio si existe en Base General -->
+              {% if stop.delivery.delivery_point and stop.delivery.delivery_point.photo_url %}
+              <div class="mt-2 flex items-center gap-2 p-1.5 rounded-xl bg-slate-950/80 border border-teal-500/30 cursor-pointer hover:bg-slate-950 transition" onclick="openPhotoViewer('{{ stop.delivery.delivery_point.photo_url }}', '{{ stop.delivery.delivery_point.name|e }}', 'Punto GPS General', '')">
+                <img src="{{ stop.delivery.delivery_point.photo_url }}" alt="Fachada punto" class="w-11 h-11 rounded-lg object-cover border border-teal-500/40 shrink-0"/>
+                <div class="text-[10px] min-w-0">
+                  <span class="font-bold text-teal-300 flex items-center gap-1">
+                    <span class="material-symbols-outlined text-xs">photo_camera</span>
+                    <span>Foto Fachada Registrada</span>
+                  </span>
+                  <span class="text-slate-400 block truncate">Toca para ampliar foto de referencia</span>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Contactos Telefónicos: Responsable que recibe y Lugar/Cliente -->
+          <div class="pt-2 border-t border-slate-800 space-y-1.5 text-[11px]">
+            <!-- Responsable / Quien Recibe -->
+            <div class="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-950/60 border border-slate-800/80">
+              <div class="truncate">
+                <span class="text-[10px] text-slate-400 block font-medium">👤 Responsable / Recibe:</span>
+                <span class="font-bold text-white text-xs truncate">{{ stop.delivery.recipient_name }}</span>
+              </div>
+              <a href="tel:{{ stop.delivery.recipient_phone }}" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-500/30 font-bold transition shrink-0">
+                <span class="material-symbols-outlined text-xs">phone</span>
+                <span>{{ stop.delivery.recipient_phone }}</span>
+              </a>
+            </div>
+
+            <!-- Teléfono del Lugar / Establecimiento (si existe diferente al del receptor) -->
+            {% if place_phone and place_phone != stop.delivery.recipient_phone %}
+            <div class="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-950/60 border border-slate-800/80">
+              <div class="truncate">
+                <span class="text-[10px] text-slate-400 block font-medium">🏢 Tel. Establecimiento ({{ place_name }}):</span>
+                <span class="font-semibold text-slate-300 text-xs">{{ place_phone }}</span>
+              </div>
+              <a href="tel:{{ place_phone }}" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-600/20 text-sky-300 hover:bg-sky-600/30 border border-sky-500/30 font-bold transition shrink-0">
+                <span class="material-symbols-outlined text-xs">call</span>
+                <span>{{ place_phone }}</span>
+              </a>
+            </div>
+            {% endif %}
+
+            <!-- Horario / ETA -->
+            <div class="flex items-center justify-between text-[10px] text-slate-400 px-1 pt-0.5">
+              <span>Ventana: <b class="text-slate-300">{{ stop.delivery.time_window_start }} - {{ stop.delivery.time_window_end }}</b></span>
+              <span>ETA estimado: <b class="text-sky-300 font-mono">{{ stop.estimated_arrival or '09:00' }}</b></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Evidencia de Entrega (Si ya fue completada) -->
+        {% if stop.status == 'COMPLETADO' %}
+        <div class="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 text-xs space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-300 flex items-center gap-1.5 text-xs">
+              <span class="material-symbols-outlined text-base text-emerald-400">verified</span>
+              <span>Comprobante de Entrega Verificado</span>
+            </span>
+            {% if stop.delivery.delivered_at or stop.completion_time %}
+            <span class="text-[10px] text-emerald-400/80 font-mono">
+              {{ (stop.delivery.delivered_at or stop.completion_time).strftime('%H:%M - %d/%m') if (stop.delivery.delivered_at or stop.completion_time) else 'Entregado' }}
+            </span>
+            {% endif %}
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-300 pt-0.5">
+            <div>
+              <span class="text-slate-400 text-[10px] block">Recibido por:</span>
+              <span class="font-semibold text-white">{{ stop.delivery.recipient_name }}</span>
+            </div>
+            {% if stop.delivery.recipient_id_card %}
+            <div>
+              <span class="text-slate-400 text-[10px] block">Cédula / Documento:</span>
+              <span class="font-mono text-emerald-300 font-bold">{{ stop.delivery.recipient_id_card }}</span>
+            </div>
+            {% endif %}
+          </div>
+
+          {% if stop.notes or stop.delivery.incident_reason %}
+          <div class="text-[11px] text-slate-300 bg-slate-900/60 p-2 rounded-xl border border-slate-800">
+            <span class="text-slate-400 text-[10px] block font-medium">Observaciones de entrega:</span>
+            <p class="text-slate-200 mt-0.5">{{ stop.notes or stop.delivery.incident_reason }}</p>
+          </div>
+          {% endif %}
+
+          {% if stop.delivery.proof_photo_url %}
+          <div class="pt-1">
+            <span class="text-slate-400 text-[10px] block mb-1 font-medium">Fotografía Comprobante Adjunta:</span>
+            <div class="relative group rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-900 aspect-video max-h-36 cursor-pointer shadow-md" onclick="openPhotoViewer('{{ stop.delivery.proof_photo_url }}', '{{ stop.delivery.recipient_name|e }}', '{{ stop.delivery.tracking_code }}', '{{ stop.delivery.recipient_id_card or '' }}')">
+              <img src="{{ stop.delivery.proof_photo_url }}" alt="Foto comprobante" class="w-full h-full object-cover group-hover:scale-105 transition duration-300"/>
+              <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex items-end justify-between p-2">
+                <span class="text-[10px] font-bold text-white flex items-center gap-1">
+                  <span class="material-symbols-outlined text-xs text-emerald-400">zoom_in</span>
+                  <span>Ver Comprobante</span>
+                </span>
+                <span class="px-1.5 py-0.2 text-[9px] font-bold rounded bg-emerald-500/80 text-black">FOTO HD</span>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Opción para Registrar / Fijar Punto GPS en la Base General -->
+        <button type="button" onclick="startGPSRegistrationForStop('{{ (place_name or stop.delivery.recipient_name)|e }}', '{{ stop.delivery.address|e }}', '{{ (stop.delivery.neighborhood or 'Cartagena')|e }}', '{{ (stop.delivery.reference_point or '')|e }}', '{{ (place_phone or stop.delivery.recipient_phone)|e }}', {{ stop.delivery.id }})" class="w-full py-2 px-3 rounded-xl bg-slate-950/80 hover:bg-slate-900 text-teal-300 border border-teal-500/30 flex items-center justify-between text-[11px] font-bold shadow-xs cursor-pointer transition">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm text-emerald-400">add_location_alt</span>
+            <span>{% if stop.delivery.delivery_point %}Actualizar GPS del Punto en Base General{% else %}Registrar Punto GPS en Base General{% endif %}</span>
+          </div>
+          <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded {% if stop.delivery.delivery_point %}bg-emerald-500/20 text-emerald-400 border border-emerald-500/30{% else %}bg-amber-500/20 text-amber-300 border border-amber-500/30{% endif %}">
+            {% if stop.delivery.delivery_point %}Punto Vinculado{% else %}Sin GPS{% endif %}
+          </span>
+        </button>
+
+        <!-- Action Buttons -->
+        {% if stop.status != 'COMPLETADO' %}
+        <div class="grid grid-cols-3 gap-2 pt-1">
+          <a href="https://www.google.com/maps/dir/?api=1&destination={{ stop.delivery.latitude }},{{ stop.delivery.longitude }}" target="_blank" class="p-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-200 flex flex-col items-center justify-center text-[10px] font-semibold gap-0.5">
+            <span class="material-symbols-outlined text-base text-sky-400">navigation</span>
+            <span>Navegar</span>
+          </a>
+
+          <button onclick="setStopStatus({{ stop.id }}, 'EN_CAMINO')" class="p-2.5 rounded-xl bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 border border-sky-500/40 flex flex-col items-center justify-center text-[10px] font-semibold gap-0.5 cursor-pointer">
+            <span class="material-symbols-outlined text-base text-sky-400">moped</span>
+            <span>En Camino</span>
+          </button>
+
+          <button onclick="openDeliveryModal({{ stop.id }}, '{{ stop.delivery.recipient_name|e }}', '{{ stop.delivery.tracking_code }}', {{ stop.delivery.id }}, '{{ stop.delivery.package_type }}', '{{ stop.delivery.priority }}', '{{ place_name|e }}', '{{ stop.delivery.recipient_phone }}', '{{ place_phone }}')" class="p-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white flex flex-col items-center justify-center text-[10px] font-bold gap-0.5 shadow-md shadow-emerald-600/20 cursor-pointer">
+            <span class="material-symbols-outlined text-base">check_circle</span>
+            <span>Entregar</span>
+          </button>
+        </div>
+        {% endif %}
+
+      </div>
+      {% endfor %}
+    </div>
+
+    {% else %}
+    <div class="text-center py-12 px-4 bg-slate-800/50 rounded-2xl border border-slate-700 space-y-2">
+      <span class="material-symbols-outlined text-5xl text-slate-500">moped</span>
+      <h3 class="font-heading font-bold text-base text-white">Sin ruta asignada en este momento</h3>
+      <p class="text-xs text-slate-400">Puedes utilizar la herramienta superior para registrar puntos GPS de clientes en campo.</p>
+    </div>
+    {% endif %}
+
+  </main>
+
+  <!-- MODAL: REGISTRO DE PUNTO GPS CON DETECCIÓN DE DUPLICADOS (50m) -->
+  <div id="gpsRegistrationModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="h-8 w-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+            <span class="material-symbols-outlined text-lg">gps_fixed</span>
+          </div>
+          <div>
+            <h3 class="font-heading font-bold text-base text-white">Registrar Punto GPS</h3>
+            <p class="text-[10px] text-emerald-300 font-medium flex items-center gap-1">
+              <span>👤 Repartidor:</span>
+              <b class="text-white">{{ current_user.full_name if current_user else (driver.name if driver else 'Repartidor') }}</b>
+            </p>
+          </div>
+        </div>
+        <button onclick="closeGPSRegistrationModal()" class="text-slate-400 hover:text-white cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- GPS Coordinates & Status Banner -->
+      <div class="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <div class="flex items-center gap-1.5">
+            <span id="gpsStatusDot" class="h-2 w-2 rounded-full bg-amber-400 animate-ping"></span>
+            <span id="gpsStatusText" class="font-semibold text-amber-300">Obteniendo coordenadas GPS...</span>
+          </div>
+          <button type="button" onclick="acquireDeviceGPS()" class="p-1 rounded-lg bg-slate-800 text-sky-400 hover:bg-slate-700" title="Recalcular GPS">
+            <span class="material-symbols-outlined text-sm">refresh</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-300 pt-1">
+          <div>Lat: <b id="displayLat" class="text-white">---.-----</b></div>
+          <div>Lng: <b id="displayLng" class="text-white">---.-----</b></div>
+        </div>
+        <div class="text-[10px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-1">
+          <span>Precisión GPS: <b id="displayAccuracy" class="text-emerald-400">Buscando...</b></span>
+          <span class="text-slate-500">Fuente: GPS Móvil en Campo</span>
+        </div>
+      </div>
+
+      <!-- Live Mini Map Preview -->
+      <div id="miniGpsMap" class="w-full h-36 rounded-xl border border-slate-800 z-10"></div>
+
+      <!-- DUPLICATE WARNING ALERT (If points found within 50m) -->
+      <div id="duplicateAlertBox" class="hidden p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-xs space-y-2">
+        <div class="flex items-start gap-2 text-amber-300 font-bold">
+          <span class="material-symbols-outlined text-lg shrink-0 text-amber-400">warning</span>
+          <div>
+            <p>¡Punto cercano detectado en la Base General!</p>
+            <p id="duplicateDetailText" class="text-[11px] font-normal text-amber-200/90 mt-0.5"></p>
+          </div>
+        </div>
+        <p class="text-[10px] text-slate-400">Para evitar duplicar registros en la Base General, puedes actualizar las coordenadas de este punto existente con tu ubicación GPS actual.</p>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button type="button" onclick="useExistingNearbyPoint()" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition cursor-pointer flex items-center justify-center gap-1">
+            <span class="material-symbols-outlined text-xs">sync</span>
+            <span>Actualizar Este (No Duplicar)</span>
+          </button>
+          <button type="button" onclick="confirmForceNewPoint()" class="py-2 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-[10px] border border-slate-600 transition cursor-pointer">
+            Crear Como Nuevo
+          </button>
+        </div>
+      </div>
+
+      <!-- Form for Client & Point Data -->
+      <form id="gpsPointForm" onsubmit="submitGPSPoint(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="pointLat"/>
+        <input type="hidden" id="pointLng"/>
+        <input type="hidden" id="pointAccuracy"/>
+        <input type="hidden" id="pointDeliveryId" value=""/>
+        <input type="hidden" id="forceDuplicateFlag" value="false"/>
+        <input type="hidden" id="selectedExistingPointId" value=""/>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Nombre / Razón Social del Punto o Local *</label>
+          <input type="text" id="pointName" required placeholder="Ej. Ferretería El Carmen, Droguería Manga..." class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"/>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Documento / NIT</label>
+            <input type="text" id="clientDoc" placeholder="1047123456" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"/>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Teléfono Contacto *</label>
+            <input type="text" id="clientPhone" required placeholder="300 123 4567" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"/>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Dirección Exacta *</label>
+          <input type="text" id="pointAddress" required placeholder="Ej. Cra 24 # 25-10" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"/>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Barrio</label>
+            <input type="text" id="pointNeighborhood" placeholder="Manga, Bocagrande..." class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"/>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-300 mb-1">Referencia</label>
+            <input type="text" id="pointReference" placeholder="Frente al parque..." class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"/>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-300 mb-1">Observaciones Operativas</label>
+          <textarea id="pointNotes" rows="2" placeholder="Ej. Portón azul, timbre no funciona, llamar antes de llegar..." class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+        </div>
+
+        <!-- SECCIÓN: FOTOGRAFÍA DE LA DIRECCIÓN / FACHADA REAL CON CÁMARA -->
+        <div class="p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-base text-teal-400">photo_camera</span>
+              <span>Fotografía de la Dirección Real</span>
+            </label>
+            <span id="gpsPhotoStatusLabel" class="text-[10px] text-teal-300 font-semibold flex items-center gap-0.5">
+              <span class="material-symbols-outlined text-xs">camera_alt</span>
+              <span>Referencia Visual</span>
+            </span>
+          </div>
+
+          <p class="text-[11px] text-slate-400">
+            Toma una fotografía de la fachada, entrada o nomenclatura real del sitio para consolidar los 2 puntos de referencia: <b>Ubicación GPS precisa</b> y <b>Fotografía real</b>.
+          </p>
+
+          <!-- Live GPS Camera Viewfinder Stream -->
+          <div id="gpsCameraStreamContainer" class="hidden space-y-2">
+            <div class="relative rounded-2xl overflow-hidden bg-black aspect-video border border-teal-500/50 flex items-center justify-center shadow-inner">
+              <video id="gpsCameraVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+              <div class="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-rose-600/90 text-white text-[9px] font-bold flex items-center gap-1 shadow-xs animate-pulse">
+                <span class="h-1.5 w-1.5 rounded-full bg-white"></span>
+                <span>CÁMARA EN DIRECTO</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="takeGPSPhotoSnapshot()" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-teal-500/20 cursor-pointer">
+                <span class="material-symbols-outlined text-lg">camera</span>
+                <span>CAPTURAR FOTO DEL SITIO</span>
+              </button>
+              <button type="button" onclick="stopGPSCameraStream()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer">
+                Cerrar
+              </button>
+            </div>
+          </div>
+
+          <!-- Captured GPS Photo Preview -->
+          <div id="gpsPhotoPreviewContainer" class="hidden space-y-2">
+            <div class="relative rounded-2xl overflow-hidden border border-teal-500/50 bg-slate-900 aspect-video shadow-md">
+              <img id="gpsCapturedPhotoImg" src="" alt="Fachada capturada" class="w-full h-full object-cover"/>
+              <span class="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-teal-950/90 text-teal-300 text-[10px] font-bold border border-teal-500/40 flex items-center gap-1 backdrop-blur-xs">
+                <span class="material-symbols-outlined text-xs">verified</span>
+                <span>Foto de Fachada Adjunta</span>
+              </span>
+              <button type="button" onclick="clearGPSCapturedPhoto()" class="absolute top-2 right-2 p-1.5 rounded-full bg-slate-950/80 text-rose-400 hover:text-rose-300 cursor-pointer shadow-md" title="Eliminar y repetir foto">
+                <span class="material-symbols-outlined text-sm">delete</span>
+              </button>
+            </div>
+            <button type="button" onclick="requestGPSCameraAccess()" class="w-full py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-teal-300 text-xs font-semibold flex items-center justify-center gap-1 border border-slate-700 transition cursor-pointer">
+              <span class="material-symbols-outlined text-sm">replay</span>
+              <span>Tomar Otra Fotografía</span>
+            </button>
+          </div>
+
+          <!-- Buttons to Launch Camera or Upload File for GPS Point -->
+          <div id="gpsCameraLaunchButtons" class="grid grid-cols-2 gap-2">
+            <button type="button" onclick="requestGPSCameraAccess()" class="py-2.5 px-3 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/40 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-xs">
+              <span class="material-symbols-outlined text-lg text-teal-400">photo_camera</span>
+              <span>Abrir Cámara</span>
+            </button>
+
+            <label class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer text-center">
+              <span class="material-symbols-outlined text-lg text-sky-400">upload_file</span>
+              <span>Subir Archivo</span>
+              <input type="file" id="gpsCameraFileInput" accept="image/*" capture="environment" onchange="handleGPSNativeFileInput(event)" class="hidden"/>
+            </label>
+          </div>
+
+          <!-- GPS Camera Permission Error Banner -->
+          <div id="gpsCameraPermissionNotice" class="hidden p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-[11px] text-rose-300 space-y-1">
+            <div class="flex items-center gap-1 font-bold">
+              <span class="material-symbols-outlined text-sm">no_photography</span>
+              <span id="gpsCameraNoticeText">No se pudo acceder a la cámara.</span>
+            </div>
+            <p class="text-slate-400 text-[10px]">Por favor permite el acceso en la configuración del navegador o utiliza el botón "Subir Archivo".</p>
+          </div>
+
+          <canvas id="gpsPhotoHiddenCanvas" class="hidden"></canvas>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
+          <button type="button" onclick="closeGPSRegistrationModal()" class="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs cursor-pointer">
+            Cancelar
+          </button>
+          <button type="submit" id="savePointBtn" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 cursor-pointer flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm">cloud_upload</span>
+            <span>Guardar en Base General</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delivery Confirmation Modal With Camera Support -->
+  <div id="deliveryModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-3xl p-5 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="font-heading font-bold text-base text-white flex items-center gap-2">
+          <span class="material-symbols-outlined text-emerald-400">verified</span>
+          <span>Confirmar Entrega y Evidencia</span>
+        </h3>
+        <button type="button" onclick="closeDeliveryModal()" class="text-slate-400 hover:text-white cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Resumen de Entrega: ID, Paquete, Prioridad, Lugar y Contacto -->
+      <div class="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2 text-xs">
+        <div class="flex items-center justify-between flex-wrap gap-1">
+          <span id="modalDeliveryId" class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono font-bold text-[11px] border border-sky-500/30"></span>
+          <span id="modalPriorityBadge"></span>
+        </div>
+        
+        <!-- Info Lugar y Contactos Telefónicos -->
+        <div class="space-y-1.5 pt-1 border-t border-slate-800/80">
+          <div id="modalLocationRow" class="hidden p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <span class="text-[10px] text-amber-400/90 block font-semibold">🏢 Lugar / Establecimiento:</span>
+                <p id="modalLocationName" class="font-bold text-amber-300 text-xs"></p>
+              </div>
+              <div id="modalLocationPhoneContainer" class="hidden shrink-0">
+                <a id="modalLocationPhoneLink" href="#" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">
+                  <span class="material-symbols-outlined text-xs">call</span>
+                  <span id="modalLocationPhone"></span>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <span class="text-[10px] text-emerald-400/90 block font-semibold">👤 Responsable / Destinatario:</span>
+                <p id="modalRecipientDisplay" class="font-bold text-white text-xs"></p>
+              </div>
+              <div class="shrink-0">
+                <a id="modalRecipientPhoneLink" href="#" class="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                  <span class="material-symbols-outlined text-xs">phone</span>
+                  <span id="modalRecipientPhone"></span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px]">
+          <span class="text-slate-400">Tipo de Paquete:</span>
+          <span id="modalPackageType" class="font-bold text-amber-300"></span>
+        </div>
+      </div>
+
+      <!-- Nombre de la Persona que Recibe / Responsable -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Nombre de la persona que recibe *</label>
+        <input type="text" id="recipientNameInput" required placeholder="Nombre completo del responsable que recibe" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"/>
+      </div>
+
+      <!-- Cédula y Documento de Quien Recibe -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Cédula / Documento de quien recibe</label>
+        <input type="text" id="recipientIdCard" placeholder="Ej. 1047123456" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"/>
+      </div>
+
+      <!-- SECCIÓN FOTOGRAFÍA / CÁMARA PARA COMPROBANTE -->
+      <div class="p-3.5 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <label class="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-base text-emerald-400">photo_camera</span>
+            <span>Fotografía del Comprobante</span>
+          </label>
+          <span id="photoStatusLabel" class="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
+            <span class="material-symbols-outlined text-xs">info</span>
+            <span>Permiso de cámara</span>
+          </span>
+        </div>
+
+        <p class="text-[11px] text-slate-400">
+          Toma una fotografía del paquete entregado, la firma en planilla o la recepción para comprobar la entrega.
+        </p>
+
+        <!-- Live Camera Viewfinder Stream -->
+        <div id="cameraStreamContainer" class="hidden space-y-2">
+          <div class="relative rounded-2xl overflow-hidden bg-black aspect-video border border-emerald-500/50 flex items-center justify-center shadow-inner">
+            <video id="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+            <div class="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-rose-600/90 text-white text-[9px] font-bold flex items-center gap-1 shadow-xs animate-pulse">
+              <span class="h-1.5 w-1.5 rounded-full bg-white"></span>
+              <span>CÁMARA EN DIRECTO</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="takePhotoSnapshot()" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-heading font-black text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 cursor-pointer">
+              <span class="material-symbols-outlined text-lg">camera</span>
+              <span>CAPTURAR FOTOGRAFÍA</span>
+            </button>
+            <button type="button" onclick="stopCameraStream()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer">
+              Cerrar
+            </button>
+          </div>
+        </div>
+
+        <!-- Captured Photo Preview -->
+        <div id="photoPreviewContainer" class="hidden space-y-2">
+          <div class="relative rounded-2xl overflow-hidden border border-emerald-500/50 bg-slate-900 aspect-video shadow-md">
+            <img id="capturedPhotoImg" src="" alt="Evidencia capturada" class="w-full h-full object-cover"/>
+            <span class="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-emerald-950/90 text-emerald-300 text-[10px] font-bold border border-emerald-500/40 flex items-center gap-1 backdrop-blur-xs">
+              <span class="material-symbols-outlined text-xs">verified</span>
+              <span>Foto de Entrega Adjunta</span>
+            </span>
+            <button type="button" onclick="clearCapturedPhoto()" class="absolute top-2 right-2 p-1.5 rounded-full bg-slate-950/80 text-rose-400 hover:text-rose-300 cursor-pointer shadow-md" title="Eliminar y repetir foto">
+              <span class="material-symbols-outlined text-sm">delete</span>
+            </button>
+          </div>
+          <button type="button" onclick="requestCameraAccess()" class="w-full py-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-sky-300 text-xs font-semibold flex items-center justify-center gap-1 border border-slate-700 transition cursor-pointer">
+            <span class="material-symbols-outlined text-sm">replay</span>
+            <span>Tomar Otra Fotografía</span>
+          </button>
+        </div>
+
+        <!-- Buttons to Launch Camera or Upload File -->
+        <div id="cameraLaunchButtons" class="grid grid-cols-2 gap-2">
+          <button type="button" onclick="requestCameraAccess()" class="py-2.5 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-xs">
+            <span class="material-symbols-outlined text-lg text-emerald-400">photo_camera</span>
+            <span>Abrir Cámara</span>
+          </button>
+
+          <label class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer text-center">
+            <span class="material-symbols-outlined text-lg text-sky-400">upload_file</span>
+            <span>Subir Archivo</span>
+            <input type="file" id="cameraFileInput" accept="image/*" capture="environment" onchange="handleNativeFileInput(event)" class="hidden"/>
+          </label>
+        </div>
+
+        <!-- Camera Permission Error Banner -->
+        <div id="cameraPermissionNotice" class="hidden p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-[11px] text-rose-300 space-y-1">
+          <div class="flex items-center gap-1 font-bold">
+            <span class="material-symbols-outlined text-sm">no_photography</span>
+            <span id="cameraNoticeText">No se pudo acceder a la cámara.</span>
+          </div>
+          <p class="text-slate-400 text-[10px]">Por favor permite el acceso en la configuración de permisos del navegador o utiliza el botón "Subir Archivo".</p>
+        </div>
+
+        <canvas id="photoHiddenCanvas" class="hidden"></canvas>
+      </div>
+
+      <!-- Observaciones de la Entrega -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Notas / Observaciones de Entrega</label>
+        <textarea id="deliveryNotes" rows="2" placeholder="Ej. Paquete entregado en recepción, recibido en perfecto estado..." class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-800 border border-slate-700 text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+      </div>
+
+      <div class="pt-2 flex items-center gap-2 border-t border-slate-800">
+        <button type="button" onclick="closeDeliveryModal()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition cursor-pointer">
+          Cancelar
+        </button>
+        <button type="button" onclick="confirmDelivery()" id="btnConfirmDelivery" class="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-1.5 cursor-pointer">
+          <span class="material-symbols-outlined text-sm">check_circle</span>
+          <span>Confirmar Entrega</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Photo Fullscreen Viewer Modal -->
+  <div id="photoViewerModal" class="hidden fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="relative w-full max-w-lg space-y-3">
+      <div class="flex items-center justify-between text-white pb-2 border-b border-slate-800">
+        <div>
+          <h4 id="viewerRecipient" class="font-heading font-bold text-sm text-white">Comprobante de Entrega</h4>
+          <p id="viewerTracking" class="text-xs font-mono text-emerald-400"></p>
+        </div>
+        <button onclick="closePhotoViewer()" class="p-1.5 rounded-full bg-slate-800 text-slate-300 hover:text-white cursor-pointer">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl max-h-[70vh] flex items-center justify-center">
+        <img id="viewerPhotoImg" src="" alt="Comprobante completo" class="w-full h-auto max-h-[68vh] object-contain"/>
+      </div>
+      <div id="viewerIdCardBox" class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 flex items-center justify-between">
+        <span>Cédula / Documento registrado:</span>
+        <b id="viewerIdCard" class="font-mono text-emerald-300"></b>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/main.js"></script>
+  <script>
+    let activeStopId = null;
+    let miniMap = null;
+    let miniMapMarker = null;
+    let currentNearbyPoints = [];
+    let cameraMediaStream = null;
+    let capturedPhotoBase64 = null;
+    let gpsCameraMediaStream = null;
+    let gpsCapturedPhotoBase64 = null;
+
+    // --- MANEJO DE PARADAS ---
+    async function setStopStatus(stopId, statusStr) {
+      try {
+        const resp = await fetch(`/api/routes/stops/${stopId}/status?status_str=${statusStr}`, {
+          method: 'PATCH'
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || 'Error al actualizar estado');
+        }
+        showNotification(`Parada actualizada a ${statusStr}`);
+        setTimeout(() => location.reload(), 600);
+      } catch (err) {
+        showNotification(err.message, 'error');
+      }
+    }
+
+    function openDeliveryModal(stopId, recipientName, trackingCode, deliveryId, packageType, priority, locationName, recipientPhone, locationPhone) {
+      activeStopId = stopId;
+      capturedPhotoBase64 = null;
+      clearCapturedPhoto();
+
+      document.getElementById('modalRecipientDisplay').innerText = recipientName || 'Destinatario';
+      document.getElementById('modalRecipientPhone').innerText = recipientPhone || 'N/A';
+      document.getElementById('modalRecipientPhoneLink').href = recipientPhone ? `tel:${recipientPhone}` : '#';
+      document.getElementById('recipientNameInput').value = recipientName || '';
+      document.getElementById('modalDeliveryId').innerText = `ID #${deliveryId || ''} • ${trackingCode || ''}`;
+      
+      const cleanPkg = (packageType || 'PAQUETE').replace(/_/g, ' ');
+      document.getElementById('modalPackageType').innerText = cleanPkg;
+
+      // Lugar / Establecimiento
+      const locRow = document.getElementById('modalLocationRow');
+      const locNameEl = document.getElementById('modalLocationName');
+      if (locationName && locationName.trim()) {
+        locNameEl.innerText = locationName;
+        locRow.classList.remove('hidden');
+      } else {
+        locRow.classList.add('hidden');
+      }
+
+      // Teléfono Lugar
+      const locPhoneContainer = document.getElementById('modalLocationPhoneContainer');
+      const locPhoneEl = document.getElementById('modalLocationPhone');
+      const locPhoneLink = document.getElementById('modalLocationPhoneLink');
+      if (locationPhone && locationPhone.trim() && locationPhone !== recipientPhone) {
+        locPhoneEl.innerText = locationPhone;
+        locPhoneLink.href = `tel:${locationPhone}`;
+        locPhoneContainer.classList.remove('hidden');
+      } else {
+        locPhoneContainer.classList.add('hidden');
+      }
+
+      // Prioridad Badge
+      const prioBadge = document.getElementById('modalPriorityBadge');
+      if (priority === 'ALTA') {
+        prioBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-500/25 text-rose-300 border border-rose-500/40';
+        prioBadge.innerText = '🔥 ALTA PRIORIDAD';
+      } else if (priority === 'MEDIA') {
+        prioBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+        prioBadge.innerText = '⚡ PRIORIDAD MEDIA';
+      } else {
+        prioBadge.className = 'px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-800 text-slate-400 border border-slate-700';
+        prioBadge.innerText = 'PRIORIDAD BAJA';
+      }
+
+      document.getElementById('recipientIdCard').value = '';
+      document.getElementById('deliveryNotes').value = '';
+      document.getElementById('cameraPermissionNotice').classList.add('hidden');
+      document.getElementById('deliveryModal').classList.remove('hidden');
+    }
+
+    function closeDeliveryModal() {
+      stopCameraStream();
+      activeStopId = null;
+      capturedPhotoBase64 = null;
+      document.getElementById('deliveryModal').classList.add('hidden');
+    }
+
+    // --- VISOR DE FOTOGRAFÍA EN PANTALLA COMPLETA ---
+    function openPhotoViewer(imgUrl, recipientName, trackingCode, idCard) {
+      document.getElementById('viewerPhotoImg').src = imgUrl;
+      document.getElementById('viewerRecipient').innerText = recipientName ? `Recibido por: ${recipientName}` : 'Comprobante de Entrega';
+      document.getElementById('viewerTracking').innerText = trackingCode ? `Guía: ${trackingCode}` : '';
+      
+      const idBox = document.getElementById('viewerIdCardBox');
+      const idSpan = document.getElementById('viewerIdCard');
+      if (idCard && idCard.trim()) {
+        idSpan.innerText = idCard;
+        idBox.classList.remove('hidden');
+      } else {
+        idBox.classList.add('hidden');
+      }
+      document.getElementById('photoViewerModal').classList.remove('hidden');
+    }
+
+    function closePhotoViewer() {
+      document.getElementById('photoViewerModal').classList.add('hidden');
+      document.getElementById('viewerPhotoImg').src = '';
+    }
+
+    // --- CÁMARA Y PERMISOS HTML5 ---
+    async function requestCameraAccess() {
+      const notice = document.getElementById('cameraPermissionNotice');
+      notice.classList.add('hidden');
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        document.getElementById('cameraNoticeText').innerText = "Tu navegador no soporta captura de cámara directa. Usa 'Subir Archivo'.";
+        notice.classList.remove('hidden');
+        document.getElementById('cameraFileInput').click();
+        return;
+      }
+
+      try {
+        // Pedir permiso explícito a la cámara trasera / environment
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+
+        cameraMediaStream = stream;
+        const video = document.getElementById('cameraVideo');
+        video.srcObject = stream;
+        video.play();
+
+        document.getElementById('cameraStreamContainer').classList.remove('hidden');
+        document.getElementById('cameraLaunchButtons').classList.add('hidden');
+        document.getElementById('photoPreviewContainer').classList.add('hidden');
+        document.getElementById('photoStatusLabel').innerHTML = '<span class="text-emerald-400 font-bold">● Cámara Conectada</span>';
+      } catch (err) {
+        console.warn("Camera permission denied or error:", err);
+        let msg = "Permiso de cámara no concedido.";
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          msg = "Permiso denegado: por favor concede acceso a la cámara en los permisos de tu navegador.";
+        } else if (err.name === 'NotFoundError') {
+          msg = "No se encontró cámara disponible en el dispositivo.";
+        }
+        document.getElementById('cameraNoticeText').innerText = msg;
+        notice.classList.remove('hidden');
+        document.getElementById('cameraLaunchButtons').classList.remove('hidden');
+      }
+    }
+
+    function takePhotoSnapshot() {
+      const video = document.getElementById('cameraVideo');
+      const canvas = document.getElementById('photoHiddenCanvas');
+      if (!video.videoWidth || !video.videoHeight) {
+        showNotification('Aguarde un instante mientras enfoca la cámara...', 'error');
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      capturedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.85);
+      
+      // Mostrar preview
+      document.getElementById('capturedPhotoImg').src = capturedPhotoBase64;
+      document.getElementById('photoPreviewContainer').classList.remove('hidden');
+      document.getElementById('photoStatusLabel').innerHTML = '<span class="text-emerald-300 font-bold">✓ Foto Lista</span>';
+
+      stopCameraStream();
+    }
+
+    function stopCameraStream() {
+      if (cameraMediaStream) {
+        cameraMediaStream.getTracks().forEach(track => track.stop());
+        cameraMediaStream = null;
+      }
+      document.getElementById('cameraStreamContainer').classList.add('hidden');
+      if (!capturedPhotoBase64) {
+        document.getElementById('cameraLaunchButtons').classList.remove('hidden');
+      }
+    }
+
+    function clearCapturedPhoto() {
+      capturedPhotoBase64 = null;
+      document.getElementById('capturedPhotoImg').src = '';
+      document.getElementById('photoPreviewContainer').classList.add('hidden');
+      document.getElementById('cameraLaunchButtons').classList.remove('hidden');
+      document.getElementById('photoStatusLabel').innerHTML = '<span class="text-slate-400">Opcional / Recomendado</span>';
+    }
+
+    function handleNativeFileInput(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        capturedPhotoBase64 = evt.target.result;
+        document.getElementById('capturedPhotoImg').src = capturedPhotoBase64;
+        document.getElementById('photoPreviewContainer').classList.remove('hidden');
+        document.getElementById('cameraLaunchButtons').classList.add('hidden');
+        document.getElementById('photoStatusLabel').innerHTML = '<span class="text-emerald-300 font-bold">✓ Foto Adjunta</span>';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function confirmDelivery() {
+      if (!activeStopId) return;
+      const recipientName = document.getElementById('recipientNameInput').value.trim();
+      const idCard = document.getElementById('recipientIdCard').value.trim();
+      const notes = document.getElementById('deliveryNotes').value.trim();
+      
+      if (!recipientName) {
+        showNotification('Por favor ingresa el nombre de la persona que recibe', 'error');
+        document.getElementById('recipientNameInput').focus();
+        return;
+      }
+
+      const btn = document.getElementById('btnConfirmDelivery');
+      btn.disabled = true;
+      btn.innerText = 'Guardando Entrega...';
+
+      const payload = {
+        status_str: 'COMPLETADO',
+        recipient_name: recipientName || null,
+        recipient_id_card: idCard || null,
+        notes: notes || null,
+        proof_photo_data: capturedPhotoBase64 || null
+      };
+
+      try {
+        const resp = await fetch(`/api/routes/stops/${activeStopId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || 'Error al confirmar entrega');
+        }
+        showNotification('¡Entrega y evidencia fotográfica guardadas exitosamente!');
+        closeDeliveryModal();
+        setTimeout(() => location.reload(), 700);
+      } catch (err) {
+        showNotification(err.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-sm">check_circle</span><span>Confirmar Entrega</span>';
+      }
+    }
+
+    // --- FLUJO DE REGISTRO GPS Y DETECCIÓN DE DUPLICADOS (50m) ---
+    function startGPSRegistrationForStop(name, address, neighborhood, reference, phone, deliveryId) {
+      document.getElementById('gpsRegistrationModal').classList.remove('hidden');
+      document.getElementById('duplicateAlertBox').classList.add('hidden');
+      document.getElementById('forceDuplicateFlag').value = 'false';
+      document.getElementById('selectedExistingPointId').value = '';
+      
+      document.getElementById('pointDeliveryId').value = deliveryId || '';
+      document.getElementById('pointName').value = name || '';
+      document.getElementById('pointAddress').value = address || '';
+      document.getElementById('pointNeighborhood').value = neighborhood || 'Cartagena';
+      document.getElementById('pointReference').value = reference || '';
+      document.getElementById('clientPhone').value = phone || '';
+      document.getElementById('clientDoc').value = '';
+      document.getElementById('pointNotes').value = '';
+      
+      clearGPSCapturedPhoto();
+      initMiniMap();
+      acquireDeviceGPS();
+    }
+
+    function startGPSRegistrationFlow() {
+      document.getElementById('gpsRegistrationModal').classList.remove('hidden');
+      document.getElementById('duplicateAlertBox').classList.add('hidden');
+      document.getElementById('forceDuplicateFlag').value = 'false';
+      document.getElementById('selectedExistingPointId').value = '';
+      document.getElementById('pointDeliveryId').value = '';
+      document.getElementById('gpsPointForm').reset();
+      
+      clearGPSCapturedPhoto();
+      initMiniMap();
+      acquireDeviceGPS();
+    }
+
+    function closeGPSRegistrationModal() {
+      stopGPSCameraStream();
+      clearGPSCapturedPhoto();
+      document.getElementById('gpsRegistrationModal').classList.add('hidden');
+      document.getElementById('gpsPointForm').reset();
+    }
+
+    // --- CÁMARA PARA REGISTRO DE PUNTO GPS (DIRECCIÓN / FACHADA REAL) ---
+    async function requestGPSCameraAccess() {
+      const notice = document.getElementById('gpsCameraPermissionNotice');
+      notice.classList.add('hidden');
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        document.getElementById('gpsCameraNoticeText').innerText = "Tu navegador no soporta captura de cámara directa. Usa 'Subir Archivo'.";
+        notice.classList.remove('hidden');
+        document.getElementById('gpsCameraFileInput').click();
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+
+        gpsCameraMediaStream = stream;
+        const video = document.getElementById('gpsCameraVideo');
+        video.srcObject = stream;
+        video.play();
+
+        document.getElementById('gpsCameraStreamContainer').classList.remove('hidden');
+        document.getElementById('gpsCameraLaunchButtons').classList.add('hidden');
+        document.getElementById('gpsPhotoPreviewContainer').classList.add('hidden');
+        document.getElementById('gpsPhotoStatusLabel').innerHTML = '<span class="text-teal-300 font-bold">● Cámara Conectada</span>';
+      } catch (err) {
+        console.warn("GPS Camera permission error:", err);
+        let msg = "Permiso de cámara no concedido.";
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          msg = "Permiso denegado: por favor concede acceso a la cámara en los permisos de tu navegador.";
+        } else if (err.name === 'NotFoundError') {
+          msg = "No se encontró cámara disponible en el dispositivo.";
+        }
+        document.getElementById('gpsCameraNoticeText').innerText = msg;
+        notice.classList.remove('hidden');
+        document.getElementById('gpsCameraLaunchButtons').classList.remove('hidden');
+      }
+    }
+
+    function takeGPSPhotoSnapshot() {
+      const video = document.getElementById('gpsCameraVideo');
+      const canvas = document.getElementById('gpsPhotoHiddenCanvas');
+      if (!video.videoWidth || !video.videoHeight) {
+        showNotification('Aguarde un instante mientras enfoca la cámara...', 'error');
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      gpsCapturedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+      // Mostrar preview
+      document.getElementById('gpsCapturedPhotoImg').src = gpsCapturedPhotoBase64;
+      document.getElementById('gpsPhotoPreviewContainer').classList.remove('hidden');
+      document.getElementById('gpsPhotoStatusLabel').innerHTML = '<span class="text-teal-300 font-bold">✓ Foto Fachada Lista</span>';
+
+      stopGPSCameraStream();
+    }
+
+    function stopGPSCameraStream() {
+      if (gpsCameraMediaStream) {
+        gpsCameraMediaStream.getTracks().forEach(track => track.stop());
+        gpsCameraMediaStream = null;
+      }
+      document.getElementById('gpsCameraStreamContainer').classList.add('hidden');
+      if (!gpsCapturedPhotoBase64) {
+        document.getElementById('gpsCameraLaunchButtons').classList.remove('hidden');
+      }
+    }
+
+    function clearGPSCapturedPhoto() {
+      gpsCapturedPhotoBase64 = null;
+      document.getElementById('gpsCapturedPhotoImg').src = '';
+      document.getElementById('gpsPhotoPreviewContainer').classList.add('hidden');
+      document.getElementById('gpsCameraLaunchButtons').classList.remove('hidden');
+      document.getElementById('gpsPhotoStatusLabel').innerHTML = '<span class="text-teal-300 font-semibold">Referencia Visual</span>';
+    }
+
+    function handleGPSNativeFileInput(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        gpsCapturedPhotoBase64 = evt.target.result;
+        document.getElementById('gpsCapturedPhotoImg').src = gpsCapturedPhotoBase64;
+        document.getElementById('gpsPhotoPreviewContainer').classList.remove('hidden');
+        document.getElementById('gpsCameraLaunchButtons').classList.add('hidden');
+        document.getElementById('gpsPhotoStatusLabel').innerHTML = '<span class="text-teal-300 font-bold">✓ Foto Adjunta</span>';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function initMiniMap() {
+      if (!miniMap) {
+        miniMap = L.map('miniGpsMap').setView([10.4075, -75.5342], 15);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; CARTO',
+          maxZoom: 19
+        }).addTo(miniMap);
+      } else {
+        setTimeout(() => miniMap.invalidateSize(), 200);
+      }
+    }
+
+    function acquireDeviceGPS() {
+      const statusDot = document.getElementById('gpsStatusDot');
+      const statusText = document.getElementById('gpsStatusText');
+      statusText.innerText = "Obteniendo ubicación GPS en tiempo real...";
+      statusDot.className = "h-2 w-2 rounded-full bg-amber-400 animate-ping";
+
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const accuracy = pos.coords.accuracy || 5.0;
+
+            document.getElementById('pointLat').value = lat;
+            document.getElementById('pointLng').value = lng;
+            document.getElementById('pointAccuracy').value = accuracy;
+
+            document.getElementById('displayLat').innerText = lat.toFixed(5);
+            document.getElementById('displayLng').innerText = lng.toFixed(5);
+            document.getElementById('displayAccuracy').innerText = `±${accuracy.toFixed(1)}m`;
+
+            statusText.innerText = "Ubicación GPS fijada exitosamente";
+            statusDot.className = "h-2 w-2 rounded-full bg-emerald-400";
+
+            // Centrar mapa
+            if (miniMap) {
+              miniMap.setView([lat, lng], 17);
+              if (miniMapMarker) miniMap.removeLayer(miniMapMarker);
+              miniMapMarker = L.circleMarker([lat, lng], {
+                radius: 9,
+                fillColor: '#10b981',
+                color: '#ffffff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.95
+              }).addTo(miniMap);
+            }
+
+            // Consultar duplicados en radio de 50 metros
+            checkNearbyDuplicates(lat, lng);
+          },
+          (err) => {
+            // Fallback con coordenadas estándar de Cartagena (Manga) si no hay permiso en emulador
+            console.warn("GPS error/denied, using Cartagena center fallback:", err.message);
+            const fallbackLat = 10.4075;
+            const fallbackLng = -75.5342;
+            const fallbackAcc = 8.0;
+
+            document.getElementById('pointLat').value = fallbackLat;
+            document.getElementById('pointLng').value = fallbackLng;
+            document.getElementById('pointAccuracy').value = fallbackAcc;
+
+            document.getElementById('displayLat').innerText = fallbackLat.toFixed(5);
+            document.getElementById('displayLng').innerText = fallbackLng.toFixed(5);
+            document.getElementById('displayAccuracy').innerText = `±${fallbackAcc}m (Simulado)`;
+
+            statusText.innerText = "Ubicación estimada (Cartagena Centro)";
+            statusDot.className = "h-2 w-2 rounded-full bg-sky-400";
+
+            if (miniMap) {
+              miniMap.setView([fallbackLat, fallbackLng], 16);
+              if (miniMapMarker) miniMap.removeLayer(miniMapMarker);
+              miniMapMarker = L.circleMarker([fallbackLat, fallbackLng], {
+                radius: 8,
+                fillColor: '#0284c7',
+                color: '#ffffff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.9
+              }).addTo(miniMap);
+            }
+
+            checkNearbyDuplicates(fallbackLat, fallbackLng);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      } else {
+        alert("Tu navegador no soporta geolocalización GPS.");
+      }
+    }
+
+    async function checkNearbyDuplicates(lat, lng) {
+      try {
+        const resp = await fetch(`/api/points/nearby?latitude=${lat}&longitude=${lng}&radius=50.0`);
+        if (!resp.ok) return;
+        const nearby = await resp.json();
+        currentNearbyPoints = nearby;
+
+        const alertBox = document.getElementById('duplicateAlertBox');
+        if (nearby.length > 0) {
+          const closest = nearby[0];
+          document.getElementById('duplicateDetailText').innerText = 
+            `"${closest.name}" (${closest.client_name || 'Cliente'}) a ${closest.distance_meters}m en ${closest.address}.`;
+          alertBox.classList.remove('hidden');
+        } else {
+          alertBox.classList.add('hidden');
+        }
+      } catch (err) {
+        console.error("Error comprobando duplicados:", err);
+      }
+    }
+
+    function useExistingNearbyPoint() {
+      if (currentNearbyPoints.length === 0) return;
+      const point = currentNearbyPoints[0];
+      document.getElementById('selectedExistingPointId').value = point.point_id;
+      document.getElementById('pointName').value = point.name;
+      document.getElementById('pointAddress').value = point.address;
+      document.getElementById('pointNeighborhood').value = point.neighborhood || '';
+      document.getElementById('pointReference').value = point.reference_point || '';
+      document.getElementById('clientDoc').value = point.client_document || '';
+      document.getElementById('clientPhone').value = point.client_phone || '';
+      
+      if (point.photo_url) {
+        document.getElementById('gpsCapturedPhotoImg').src = point.photo_url;
+        document.getElementById('gpsPhotoPreviewContainer').classList.remove('hidden');
+        document.getElementById('gpsCameraLaunchButtons').classList.add('hidden');
+        document.getElementById('gpsPhotoStatusLabel').innerHTML = '<span class="text-teal-300 font-bold">✓ Foto Existente Cargada</span>';
+      }
+      
+      document.getElementById('duplicateAlertBox').classList.add('hidden');
+      showNotification('Datos cargados desde el punto existente. Pulsa Guardar para actualizar coordenadas y foto.');
+    }
+
+    function confirmForceNewPoint() {
+      document.getElementById('forceDuplicateFlag').value = 'true';
+      document.getElementById('duplicateAlertBox').classList.add('hidden');
+      showNotification('Se registrará como un nuevo punto independiente.');
+    }
+
+    async function submitGPSPoint(e) {
+      e.preventDefault();
+      const existingId = document.getElementById('selectedExistingPointId').value;
+      const deliveryIdVal = document.getElementById('pointDeliveryId').value;
+      const lat = parseFloat(document.getElementById('pointLat').value);
+      const lng = parseFloat(document.getElementById('pointLng').value);
+      const accuracy = parseFloat(document.getElementById('pointAccuracy').value) || 5.0;
+      const forceDup = document.getElementById('forceDuplicateFlag').value === 'true';
+
+      const payload = {
+        name: document.getElementById('pointName').value,
+        address: document.getElementById('pointAddress').value,
+        neighborhood: document.getElementById('pointNeighborhood').value || 'Cartagena',
+        city: 'Cartagena',
+        reference_point: document.getElementById('pointReference').value || null,
+        latitude: lat,
+        longitude: lng,
+        gps_accuracy: accuracy,
+        location_source: 'GPS_DEVICE',
+        notes: document.getElementById('pointNotes').value || null,
+        client_name: document.getElementById('pointName').value,
+        client_document: document.getElementById('clientDoc').value || null,
+        client_phone: document.getElementById('clientPhone').value,
+        delivery_id: deliveryIdVal ? parseInt(deliveryIdVal) : null,
+        photo_data: gpsCapturedPhotoBase64 || null,
+        force_create_duplicate: forceDup
+      };
+
+      const saveBtn = document.getElementById('savePointBtn');
+      saveBtn.disabled = true;
+      saveBtn.innerText = 'Guardando en Base General...';
+
+      try {
+        let resp;
+        if (existingId) {
+          // Actualización de punto existente con nuevas coordenadas y foto
+          resp = await fetch(`/api/points/${existingId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } else {
+          // Creación de nuevo punto
+          resp = await fetch('/api/points', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        }
+
+        const data = await resp.json();
+
+        if (resp.status === 409 && data.detail && data.detail.duplicate_warning) {
+          // Advertencia de duplicado
+          currentNearbyPoints = data.detail.nearby_points || [];
+          document.getElementById('duplicateAlertBox').classList.remove('hidden');
+          const closest = currentNearbyPoints[0];
+          if (closest) {
+            document.getElementById('duplicateDetailText').innerText = 
+              `"${closest.name}" (${closest.client_name || 'Cliente'}) a ${closest.distance_meters}m en ${closest.address}.`;
+          }
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<span class="material-symbols-outlined text-sm">cloud_upload</span><span>Guardar en Base General</span>';
+          return;
+        }
+
+        if (!resp.ok) throw new Error(data.detail || 'Error al guardar el punto');
+
+        showNotification('¡Punto GPS y fotografía de referencia guardados exitosamente en la Base General!');
+        closeGPSRegistrationModal();
+        setTimeout(() => location.reload(), 800);
+
+      } catch (err) {
+        showNotification(err.message, 'error');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<span class="material-symbols-outlined text-sm">cloud_upload</span><span>Guardar en Base General</span>';
+      }
+    }
+  </script>
+</body>
+</html>

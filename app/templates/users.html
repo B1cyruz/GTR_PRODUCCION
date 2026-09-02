@@ -1,0 +1,622 @@
+{% extends "base.html" %}
+
+{% block title %}GTR - Gestión de Usuarios y Roles (RBAC){% endblock %}
+{% block breadcrumb %}Usuarios & Permisos{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto">
+
+  <!-- Header & KPI Bar -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+    <div class="space-y-1">
+      <div class="flex items-center gap-2">
+        <span class="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 font-bold text-xs border border-amber-500/20">MÓDULO ROOT</span>
+        <h1 class="font-heading font-black text-2xl text-slate-900 tracking-tight">Gestión de Usuarios y Roles (RBAC)</h1>
+      </div>
+      <p class="text-xs text-slate-500">Administración jerárquica de accesos, roles (ROOT, COORDINADOR, REPARTIDOR) y seguridad.</p>
+    </div>
+
+    <button onclick="openCreateUserModal()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 font-heading font-bold text-xs hover:from-amber-400 hover:to-orange-500 transition shadow-md shadow-amber-500/20 cursor-pointer">
+      <span class="material-symbols-outlined text-base">person_add</span>
+      <span>Crear Nuevo Usuario</span>
+    </button>
+  </div>
+
+  <!-- Role Hierarchy Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <!-- ROOT Role Card -->
+    <div class="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-5 shadow-xs space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="h-10 w-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-sm">
+            <span class="material-symbols-outlined text-xl">admin_panel_settings</span>
+          </div>
+          <div>
+            <h3 class="font-heading font-extrabold text-sm text-slate-900">ADMINISTRADOR ROOT</h3>
+            <p class="text-[11px] text-amber-700 font-medium">Control total del sistema</p>
+          </div>
+        </div>
+        <span class="text-xl font-heading font-black text-amber-700">
+          {{ users|selectattr('role', 'equalto', 'ROOT')|list|length }}
+        </span>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Acceso completo a usuarios, roles, auditoría, configuración, envíos, rutas y base general.
+      </p>
+    </div>
+
+    <!-- COORDINADOR Role Card -->
+    <div class="bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-transparent border border-sky-500/30 rounded-2xl p-5 shadow-xs space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="h-10 w-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold shadow-sm">
+            <span class="material-symbols-outlined text-xl">local_shipping</span>
+          </div>
+          <div>
+            <h3 class="font-heading font-extrabold text-sm text-slate-900">COORDINADOR</h3>
+            <p class="text-[11px] text-sky-700 font-medium">Operación y Despacho</p>
+          </div>
+        </div>
+        <span class="text-xl font-heading font-black text-sky-700">
+          {{ users|selectattr('role', 'equalto', 'COORDINADOR')|list|length }}
+        </span>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Gestión de rutas, asignación de envíos, optimización TSP, consulta de clientes y puntos GPS.
+      </p>
+    </div>
+
+    <!-- REPARTIDOR Role Card -->
+    <div class="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 rounded-2xl p-5 shadow-xs space-y-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm">
+            <span class="material-symbols-outlined text-xl">moped</span>
+          </div>
+          <div>
+            <h3 class="font-heading font-extrabold text-sm text-slate-900">REPARTIDOR</h3>
+            <p class="text-[11px] text-emerald-700 font-medium">Operación en Campo</p>
+          </div>
+        </div>
+        <span class="text-xl font-heading font-black text-emerald-700">
+          {{ users|selectattr('role', 'equalto', 'REPARTIDOR')|list|length }}
+        </span>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Interfaz móvil simplificada, ruta activa, entrega de paquetes y captura de puntos GPS en tiempo real.
+      </p>
+    </div>
+  </div>
+
+  <!-- Users Table Card -->
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+    <div class="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-slate-600">group</span>
+        <h2 class="font-heading font-bold text-base text-slate-900">Directorio de Usuarios Registrados</h2>
+        <span class="text-xs text-slate-400">({{ users|length }} total)</span>
+      </div>
+
+      <!-- Search & Filters -->
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <input type="text" id="userTableSearch" onkeyup="filterUsersTable()" placeholder="Buscar usuario..." class="pl-8 pr-3 py-1.5 text-xs rounded-xl bg-white border border-slate-300 text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-sky-500 focus:outline-none"/>
+          <span class="material-symbols-outlined text-sm text-slate-400 absolute left-2.5 top-2">search</span>
+        </div>
+        <select id="userRoleFilter" onchange="filterUsersTable()" class="py-1.5 px-3 text-xs rounded-xl bg-white border border-slate-300 text-slate-700 focus:ring-2 focus:ring-sky-500 focus:outline-none">
+          <option value="">Todos los Roles</option>
+          <option value="ROOT">ROOT</option>
+          <option value="COORDINADOR">COORDINADOR</option>
+          <option value="REPARTIDOR">REPARTIDOR</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse" id="usersTable">
+        <thead>
+          <tr class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            <th class="py-3 px-4">Usuario</th>
+            <th class="py-3 px-4">Rol & Permisos</th>
+            <th class="py-3 px-4">Contacto / Teléfono</th>
+            <th class="py-3 px-4">Conductor Asignado</th>
+            <th class="py-3 px-4">Último Acceso</th>
+            <th class="py-3 px-4">Estado</th>
+            <th class="py-3 px-4 text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 text-xs">
+          {% for u in users %}
+          <tr class="hover:bg-slate-50/80 transition-all user-row" data-role="{{ u.role }}" data-name="{{ u.full_name|lower }} {{ u.email|lower }}">
+            
+            <!-- User Info -->
+            <td class="py-3.5 px-4">
+              <div class="flex items-center gap-3">
+                <div class="h-9 w-9 rounded-xl {% if u.role == 'ROOT' %}bg-amber-500 text-slate-950{% elif u.role == 'REPARTIDOR' %}bg-emerald-600 text-white{% else %}bg-sky-600 text-white{% endif %} font-heading font-black text-xs flex items-center justify-center shadow-xs shrink-0">
+                  {{ u.full_name[:2]|upper }}
+                </div>
+                <div>
+                  <p class="font-bold text-slate-900 leading-tight">{{ u.full_name }}</p>
+                  <p class="text-[11px] text-slate-500 font-mono">{{ u.email }}</p>
+                </div>
+              </div>
+            </td>
+
+            <!-- Role Badge -->
+            <td class="py-3.5 px-4">
+              {% if u.role == 'ROOT' %}
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                👑 ROOT (ADMIN)
+              </span>
+              {% elif u.role == 'REPARTIDOR' %}
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                🏍️ REPARTIDOR
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-300">
+                📋 COORDINADOR
+              </span>
+              {% endif %}
+            </td>
+
+            <!-- Phone -->
+            <td class="py-3.5 px-4 text-slate-600">
+              {{ u.phone or '—' }}
+            </td>
+
+            <!-- Driver Assigned -->
+            <td class="py-3.5 px-4">
+              {% if u.driver %}
+                <span class="text-xs font-semibold text-slate-800">{{ u.driver.name }}</span>
+                <span class="text-[10px] text-slate-400 block">{{ u.driver.vehicle_plate }} ({{ u.driver.vehicle_type }})</span>
+              {% else %}
+                <span class="text-slate-400 text-[11px]">N/A</span>
+              {% endif %}
+            </td>
+
+            <!-- Last Login -->
+            <td class="py-3.5 px-4 text-slate-500 text-[11px]">
+              {{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else 'Nunca' }}
+            </td>
+
+            <!-- Status Badge -->
+            <td class="py-3.5 px-4">
+              {% if u.is_active %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                Activo
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                <span class="h-1.5 w-1.5 rounded-full bg-rose-500"></span>
+                Bloqueado
+              </span>
+              {% endif %}
+            </td>
+
+            <!-- Actions -->
+            <td class="py-3.5 px-4 text-right space-x-1">
+              <button type="button"
+                      onclick="handleEditUserClick(this)" 
+                      data-id="{{ u.id }}"
+                      data-name="{{ u.full_name|e }}"
+                      data-email="{{ u.email|e }}"
+                      data-role="{{ u.role|e }}"
+                      data-phone="{{ u.phone or '' }}"
+                      data-driver="{{ u.driver_id or '' }}"
+                      title="Editar Usuario" 
+                      class="p-1.5 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition cursor-pointer">
+                <span class="material-symbols-outlined text-base">edit</span>
+              </button>
+              
+              <button type="button"
+                      onclick="handleToggleStatusClick(this)"
+                      data-id="{{ u.id }}"
+                      data-active="{{ 'false' if u.is_active else 'true' }}"
+                      data-name="{{ u.full_name|e }}"
+                      title="{{ 'Bloquear Usuario' if u.is_active else 'Desbloquear Usuario' }}" 
+                      class="p-1.5 rounded-lg {% if u.is_active %}text-amber-500 hover:text-amber-700 hover:bg-amber-50{% else %}text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50{% endif %} transition cursor-pointer">
+                <span class="material-symbols-outlined text-base">{% if u.is_active %}lock{% else %}lock_open{% endif %}</span>
+              </button>
+
+              <button type="button"
+                      onclick="handleResetPasswordClick(this)"
+                      data-id="{{ u.id }}"
+                      data-name="{{ u.full_name|e }}"
+                      title="Cambiar Contraseña" 
+                      class="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer">
+                <span class="material-symbols-outlined text-base">key</span>
+              </button>
+
+              {% if u.id != current_user.id %}
+              <button type="button"
+                      onclick="handleDeleteUserClick(this)"
+                      data-id="{{ u.id }}"
+                      data-name="{{ u.full_name|e }}"
+                      title="Eliminar Usuario" 
+                      class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer">
+                <span class="material-symbols-outlined text-base">delete</span>
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Crear Usuario -->
+<div id="createUserModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white border border-slate-200 w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <div class="flex items-center gap-2">
+        <div class="h-8 w-8 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center font-bold">
+          <span class="material-symbols-outlined text-lg">person_add</span>
+        </div>
+        <h3 class="font-heading font-bold text-base text-slate-900">Registrar Nuevo Usuario</h3>
+      </div>
+      <button onclick="closeCreateUserModal()" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <form id="createUserForm" onsubmit="submitCreateUser(event)" class="space-y-3.5">
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Nombre Completo *</label>
+        <input type="text" id="newFullName" required placeholder="Ej. Carlos Mendoza" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"/>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Correo Electrónico *</label>
+          <input type="email" id="newEmail" required placeholder="carlos@gtrlogistics.com" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Teléfono / WhatsApp</label>
+          <input type="text" id="newPhone" placeholder="300 123 4567" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"/>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Rol Asignado *</label>
+          <select id="newRole" required onchange="toggleDriverSelect(this.value, 'newDriverContainer')" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none font-bold">
+            <option value="COORDINADOR">COORDINADOR (Operaciones)</option>
+            <option value="REPARTIDOR">REPARTIDOR (Móvil / Conductor)</option>
+            <option value="ROOT">ROOT (Super Administrador)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Contraseña Inicial *</label>
+          <input type="password" id="newPassword" required placeholder="Mínimo 6 caracteres" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"/>
+        </div>
+      </div>
+
+      <div id="newDriverContainer" class="hidden">
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Vincular con Conductor de Flota</label>
+        <select id="newDriverId" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+          <option value="">-- Sin conductor asociado --</option>
+          {% for d in drivers %}
+          <option value="{{ d.id }}">{{ d.name }} ({{ d.vehicle_plate }} - {{ d.vehicle_type }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeCreateUserModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition">
+          Cancelar
+        </button>
+        <button type="submit" class="px-5 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl transition shadow-md shadow-amber-500/20">
+          Guardar Usuario
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Editar Usuario -->
+<div id="editUserModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white border border-slate-200 w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <h3 class="font-heading font-bold text-base text-slate-900">Modificar Usuario</h3>
+      <button onclick="closeEditUserModal()" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <form id="editUserForm" onsubmit="submitEditUser(event)" class="space-y-3.5">
+      <input type="hidden" id="editUserId"/>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Nombre Completo *</label>
+        <input type="text" id="editFullName" required class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none"/>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Correo Electrónico *</label>
+          <input type="email" id="editEmail" required class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Teléfono</label>
+          <input type="text" id="editPhone" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none"/>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Rol *</label>
+          <select id="editRole" required onchange="toggleDriverSelect(this.value, 'editDriverContainer')" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none font-bold">
+            <option value="ROOT">ROOT (Super Admin)</option>
+            <option value="COORDINADOR">COORDINADOR (Operaciones)</option>
+            <option value="REPARTIDOR">REPARTIDOR (Móvil)</option>
+          </select>
+        </div>
+        <div id="editDriverContainer">
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Conductor Vinculado</label>
+          <select id="editDriverId" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
+            <option value="">-- Ninguno --</option>
+            {% for d in drivers %}
+            <option value="{{ d.id }}">{{ d.name }} ({{ d.vehicle_plate }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeEditUserModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition">
+          Cancelar
+        </button>
+        <button type="submit" class="px-5 py-2 text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white rounded-xl transition shadow-md shadow-sky-500/20">
+          Actualizar Cambios
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Cambiar Contraseña -->
+<div id="resetPasswordModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+  <div class="bg-white border border-slate-200 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+      <h3 class="font-heading font-bold text-base text-slate-900">Reestablecer Contraseña</h3>
+      <button onclick="closeResetPasswordModal()" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <form onsubmit="submitResetPassword(event)" class="space-y-3.5">
+      <input type="hidden" id="resetUserId"/>
+      <p class="text-xs text-slate-600">Usuario: <b id="resetUserName" class="text-slate-900"></b></p>
+      
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Nueva Contraseña *</label>
+        <input type="password" id="newPasswordInput" required minlength="6" placeholder="Mínimo 6 caracteres" class="w-full px-3.5 py-2 text-xs rounded-xl bg-slate-50 border border-slate-300 text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"/>
+      </div>
+
+      <div class="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+        <button type="button" onclick="closeResetPasswordModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition">
+          Cancelar
+        </button>
+        <button type="submit" class="px-5 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition shadow-md shadow-indigo-500/20">
+          Guardar Contraseña
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function toggleDriverSelect(roleVal, containerId) {
+    const container = document.getElementById(containerId);
+    if (container) {
+      if (roleVal === 'REPARTIDOR') {
+        container.classList.remove('hidden');
+      } else {
+        container.classList.add('hidden');
+      }
+    }
+  }
+
+  function filterUsersTable() {
+    const searchVal = document.getElementById('userTableSearch').value.toLowerCase();
+    const roleVal = document.getElementById('userRoleFilter').value;
+    const rows = document.querySelectorAll('.user-row');
+
+    rows.forEach(row => {
+      const nameMatch = row.dataset.name.includes(searchVal);
+      const roleMatch = !roleVal || row.dataset.role === roleVal;
+      if (nameMatch && roleMatch) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+
+  function handleEditUserClick(btn) {
+    const id = btn.dataset.id;
+    const name = btn.dataset.name;
+    const email = btn.dataset.email;
+    const role = btn.dataset.role;
+    const phone = btn.dataset.phone;
+    const driverId = btn.dataset.driver ? parseInt(btn.dataset.driver) : null;
+    openEditUserModal(id, name, email, role, phone, driverId);
+  }
+
+  function handleToggleStatusClick(btn) {
+    const id = parseInt(btn.dataset.id);
+    const newActive = btn.dataset.active === 'true';
+    const name = btn.dataset.name;
+    toggleUserStatus(id, newActive, name);
+  }
+
+  function handleResetPasswordClick(btn) {
+    const id = parseInt(btn.dataset.id);
+    const name = btn.dataset.name;
+    openResetPasswordModal(id, name);
+  }
+
+  function handleDeleteUserClick(btn) {
+    const id = parseInt(btn.dataset.id);
+    const name = btn.dataset.name;
+    deleteUser(id, name);
+  }
+
+  function openCreateUserModal() {
+    document.getElementById('createUserModal').classList.remove('hidden');
+  }
+
+  function closeCreateUserModal() {
+    document.getElementById('createUserModal').classList.add('hidden');
+    document.getElementById('createUserForm').reset();
+  }
+
+  function openEditUserModal(id, name, email, role, phone, driverId) {
+    document.getElementById('editUserId').value = id;
+    document.getElementById('editFullName').value = name;
+    document.getElementById('editEmail').value = email;
+    document.getElementById('editRole').value = role;
+    document.getElementById('editPhone').value = phone || '';
+    if (driverId) {
+      document.getElementById('editDriverId').value = driverId;
+    } else {
+      document.getElementById('editDriverId').value = '';
+    }
+    toggleDriverSelect(role, 'editDriverContainer');
+    document.getElementById('editUserModal').classList.remove('hidden');
+  }
+
+  function closeEditUserModal() {
+    document.getElementById('editUserModal').classList.add('hidden');
+  }
+
+  function openResetPasswordModal(id, name) {
+    document.getElementById('resetUserId').value = id;
+    document.getElementById('resetUserName').innerText = name;
+    document.getElementById('newPasswordInput').value = '';
+    document.getElementById('resetPasswordModal').classList.remove('hidden');
+  }
+
+  function closeResetPasswordModal() {
+    document.getElementById('resetPasswordModal').classList.add('hidden');
+  }
+
+  async function submitCreateUser(e) {
+    e.preventDefault();
+    const payload = {
+      full_name: document.getElementById('newFullName').value,
+      email: document.getElementById('newEmail').value,
+      phone: document.getElementById('newPhone').value || null,
+      role: document.getElementById('newRole').value,
+      password: document.getElementById('newPassword').value,
+      driver_id: document.getElementById('newDriverId').value ? parseInt(document.getElementById('newDriverId').value) : null,
+      is_active: true
+    };
+
+    try {
+      const resp = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Error al crear usuario');
+      showNotification('Usuario creado exitosamente con rol ' + payload.role);
+      closeCreateUserModal();
+      setTimeout(() => location.reload(), 700);
+    } catch (err) {
+      showNotification(err.message, 'error');
+    }
+  }
+
+  async function submitEditUser(e) {
+    e.preventDefault();
+    const userId = document.getElementById('editUserId').value;
+    const roleVal = document.getElementById('editRole').value;
+    const driverIdVal = document.getElementById('editDriverId').value;
+    const payload = {
+      full_name: document.getElementById('editFullName').value,
+      email: document.getElementById('editEmail').value,
+      phone: document.getElementById('editPhone').value || null,
+      role: roleVal,
+      driver_id: (roleVal === 'REPARTIDOR' && driverIdVal) ? parseInt(driverIdVal) : null
+    };
+
+    try {
+      const resp = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Error al actualizar usuario');
+      showNotification('Usuario actualizado correctamente');
+      closeEditUserModal();
+      setTimeout(() => location.reload(), 700);
+    } catch (err) {
+      showNotification(err.message, 'error');
+    }
+  }
+
+  async function toggleUserStatus(userId, newActiveStatus, name) {
+    if (!confirm(`¿Estás seguro de ${newActiveStatus ? 'desbloquear' : 'bloquear'} el acceso a ${name}?`)) return;
+
+    try {
+      const resp = await fetch(`/api/users/${userId}/toggle-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: newActiveStatus })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Error al cambiar estado');
+      showNotification(`Estado de ${name} actualizado.`);
+      setTimeout(() => location.reload(), 600);
+    } catch (err) {
+      showNotification(err.message, 'error');
+    }
+  }
+
+  async function submitResetPassword(e) {
+    e.preventDefault();
+    const userId = document.getElementById('resetUserId').value;
+    const newPwd = document.getElementById('newPasswordInput').value;
+
+    try {
+      const resp = await fetch(`/api/users/${userId}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_password: newPwd })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Error al actualizar contraseña');
+      showNotification('Contraseña actualizada con éxito');
+      closeResetPasswordModal();
+    } catch (err) {
+      showNotification(err.message, 'error');
+    }
+  }
+
+  async function deleteUser(userId, name) {
+    if (!confirm(`¿Confirmas la eliminación permanente del usuario ${name}? Esta acción no se puede deshacer.`)) return;
+
+    try {
+      const resp = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      if (!resp.ok) {
+        const data = await resp.json();
+        throw new Error(data.detail || 'Error al eliminar usuario');
+      }
+      showNotification(`Usuario ${name} eliminado.`);
+      setTimeout(() => location.reload(), 600);
+    } catch (err) {
+      showNotification(err.message, 'error');
+    }
+  }
+</script>
+{% endblock %}

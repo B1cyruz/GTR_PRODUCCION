@@ -1,0 +1,26 @@
+[Unit]
+Description=GTR - Gestion Logistica y Rutas (Django 5.2 Gunicorn WSGI Service)
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/gtr
+Environment="PATH=/var/www/gtr/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+EnvironmentFile=/var/www/gtr/.env
+ExecStart=/var/www/gtr/venv/bin/gunicorn gtr_project.wsgi:application \
+          --workers 4 \
+          --bind 127.0.0.1:8000 \
+          --timeout 120 \
+          --access-logfile /var/log/gtr_access.log \
+          --error-logfile /var/log/gtr_error.log
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

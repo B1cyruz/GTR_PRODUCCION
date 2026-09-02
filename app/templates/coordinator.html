@@ -1,0 +1,681 @@
+{% extends "base.html" %}
+
+{% block title %}Coordinador de Envíos - Panel de Despacho y Asignación | GTR{% endblock %}
+{% block breadcrumb %}Coordinación y Despacho de Envíos{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+
+  <!-- Header Banner -->
+  <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex items-start gap-3.5">
+      <div class="h-12 w-12 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-sky-500/20 shrink-0">
+        <span class="material-symbols-outlined text-2xl">assignment_ind</span>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-heading text-2xl font-bold text-slate-900 tracking-tight">Coordinación de Envíos y Asignación</h1>
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-black bg-sky-100 text-sky-800 border border-sky-200">
+            {{ deliveries|length }} Envíos Hoy
+          </span>
+        </div>
+        <p class="text-sm text-slate-500 mt-1">
+          Como Coordinador/Administrador, administra las encomiendas y asígnalas a los diferentes conductores según su zona y ruta.
+        </p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <button onclick="triggerRandomDistributionCoordinator()" id="btnRandomDistributeCoord" class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-bold shadow-sm shadow-amber-500/20 transition active:scale-95 cursor-pointer">
+        <span class="material-symbols-outlined text-base">casino</span>
+        <span>Reasignar a Todos Aleatoriamente</span>
+      </button>
+
+      <button onclick="openBatchAssignModal()" id="btnBatchAssign" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition shadow-sm">
+        <span class="material-symbols-outlined text-base text-sky-400">group_add</span>
+        <span>Asignar a Conductor</span>
+      </button>
+
+      <a href="/rutas/optimizar" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white text-xs font-semibold hover:bg-sky-500 transition shadow-md shadow-sky-600/20">
+        <span class="material-symbols-outlined text-base">alt_route</span>
+        <span>Motor TSP / Optimizar</span>
+      </a>
+
+      <a href="/entregas/nueva" class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition">
+        <span class="material-symbols-outlined text-base">add</span>
+        <span>Nuevo Paquete</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Summary Badges -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      <div>
+        <p class="text-[11px] font-semibold uppercase text-slate-400">Total Envíos</p>
+        <p class="font-heading text-2xl font-black text-slate-900 mt-0.5">{{ sidebar_stats.total_deliveries if sidebar_stats else deliveries|length }}</p>
+      </div>
+      <div class="h-9 w-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
+        <span class="material-symbols-outlined text-lg">inventory_2</span>
+      </div>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      <div>
+        <p class="text-[11px] font-semibold uppercase text-amber-600">Pendientes</p>
+        <p class="font-heading text-2xl font-black text-amber-600 mt-0.5">{{ sidebar_stats.pending_deliveries if sidebar_stats else 0 }}</p>
+      </div>
+      <div class="h-9 w-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+        <span class="material-symbols-outlined text-lg">pending_actions</span>
+      </div>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      <div>
+        <p class="text-[11px] font-semibold uppercase text-sky-600">En Ruta / Asignados</p>
+        <p class="font-heading text-2xl font-black text-sky-600 mt-0.5">{{ sidebar_stats.assigned_deliveries if sidebar_stats else 0 }}</p>
+      </div>
+      <div class="h-9 w-9 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
+        <span class="material-symbols-outlined text-lg">moped</span>
+      </div>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      <div>
+        <p class="text-[11px] font-semibold uppercase text-emerald-600">Entregados</p>
+        <p class="font-heading text-2xl font-black text-emerald-600 mt-0.5">{{ sidebar_stats.delivered_count if sidebar_stats else 0 }}</p>
+      </div>
+      <div class="h-9 w-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+        <span class="material-symbols-outlined text-lg">check_circle</span>
+      </div>
+    </div>
+
+    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between col-span-2 sm:col-span-1">
+      <div>
+        <p class="text-[11px] font-semibold uppercase text-slate-500">Conductores Activos</p>
+        <p class="font-heading text-2xl font-black text-indigo-600 mt-0.5">{{ sidebar_stats.active_drivers if sidebar_stats else 2 }} / {{ drivers|length }}</p>
+      </div>
+      <div class="h-9 w-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+        <span class="material-symbols-outlined text-lg">badge</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Dual Workspace: Left = Shipments / Encomiendas, Right = Drivers & Routes -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Envíos y Encomiendas del Día (7 cols) -->
+    <div class="lg:col-span-7 space-y-4">
+      
+      <!-- Filters & Controls Bar -->
+      <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+        
+        <!-- Search and Quick Filter Row -->
+        <div class="flex flex-col sm:flex-row gap-2.5">
+          <div class="relative flex-1">
+            <span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-lg">search</span>
+            <input type="text" id="searchInput" oninput="filterDeliveries()" placeholder="Buscar por guía, destinatario o dirección..." class="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500"/>
+          </div>
+
+          <div class="flex gap-2">
+            <select id="statusFilter" onchange="filterDeliveries()" class="px-3 py-2 text-xs rounded-xl border border-slate-200 font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+              <option value="ALL">Todos los Estados</option>
+              <option value="PENDIENTE">Pendientes (Sin Asignar)</option>
+              <option value="ASIGNADO">Asignados</option>
+              <option value="EN_CAMINO">En Camino</option>
+              <option value="ENTREGADO">Entregados</option>
+              <option value="INCIDENCIA">Incidencias</option>
+            </select>
+
+            <select id="neighborhoodFilter" onchange="filterDeliveries()" class="px-3 py-2 text-xs rounded-xl border border-slate-200 font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+              <option value="ALL">Todas las Zonas</option>
+              <option value="Bocagrande">Bocagrande</option>
+              <option value="Castillogrande">Castillogrande</option>
+              <option value="Centro Histórico">Centro Histórico</option>
+              <option value="Manga">Manga</option>
+              <option value="Pie de la Popa">Pie de la Popa</option>
+              <option value="Mamonal">Mamonal</option>
+              <option value="Crespo">Crespo</option>
+              <option value="El Cabrero">El Cabrero</option>
+              <option value="Los Alpes">Los Alpes</option>
+              <option value="El Bosque">El Bosque</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Selection Toolbar -->
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 cursor-pointer font-semibold text-slate-700">
+              <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"/>
+              <span>Seleccionar todos</span>
+            </label>
+            <span id="selectedCounterBadge" class="text-sky-600 font-bold hidden">0 seleccionados</span>
+          </div>
+
+          <span class="text-[11px] text-slate-400 font-medium">Mostrando <span id="visibleDeliveriesCount">{{ deliveries|length }}</span> envíos</span>
+        </div>
+
+      </div>
+
+      <!-- Deliveries Cards / List -->
+      <div id="deliveriesListContainer" class="space-y-3.5 max-h-[750px] overflow-y-auto pr-1">
+        {% for d in deliveries %}
+        <div class="delivery-card bg-white p-4.5 rounded-2xl border border-slate-200/90 shadow-xs hover:border-sky-300 hover:shadow-md transition-all space-y-3.5"
+             data-id="{{ d.id }}"
+             data-code="{{ d.tracking_code|lower }}"
+             data-recipient="{{ d.recipient_name|lower }}"
+             data-address="{{ d.address|lower }}"
+             data-neighborhood="{{ d.neighborhood or 'Cartagena' }}"
+             data-status="{{ d.status }}"
+             data-priority="{{ d.priority }}">
+          
+          <!-- Top Card Row: ID, Guía, Prioridad y Estado de Entrega -->
+          <div class="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <input type="checkbox" value="{{ d.id }}" onchange="handleSingleSelect()" class="card-checkbox h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer"/>
+              
+              <!-- ID del Envío -->
+              <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-black bg-slate-900 text-white tracking-wide shadow-xs">
+                ID #{{ d.id }}
+              </span>
+
+              <!-- Código de Guía / Tracking -->
+              <span class="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
+                {{ d.tracking_code }}
+              </span>
+
+              {% if d.priority == 'ALTA' %}
+              <span class="px-2 py-0.5 text-[10px] font-extrabold rounded-md bg-rose-50 text-rose-700 border border-rose-200">ALTA PRIORIDAD</span>
+              {% elif d.priority == 'MEDIA' %}
+              <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-sky-50 text-sky-700 border border-sky-200">MEDIA</span>
+              {% else %}
+              <span class="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-600">BAJA</span>
+              {% endif %}
+            </div>
+
+            <!-- Estado de Entrega -->
+            <div>
+              {% if d.status == 'ENTREGADO' %}
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                <span class="h-2 w-2 rounded-full bg-emerald-500"></span> Entregado
+              </span>
+              {% elif d.status in ['ASIGNADO', 'EN_CAMINO'] %}
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-sky-50 text-sky-700 border border-sky-200 shadow-xs">
+                <span class="h-2 w-2 rounded-full bg-sky-500 animate-pulse"></span> {{ d.status|replace('_', ' ') }}
+              </span>
+              {% elif d.status == 'INCIDENCIA' %}
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-rose-50 text-rose-700 border border-rose-200 shadow-xs">
+                <span class="h-2 w-2 rounded-full bg-rose-500"></span> Incidencia
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">
+                <span class="h-2 w-2 rounded-full bg-amber-500"></span> Pendiente de Asignar
+              </span>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Main Info Grid: Dirección de Entrega y Repartidor Asignado -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            
+            <!-- Bloque 1: Dirección de Entrega & Destinatario -->
+            <div class="bg-slate-50/90 p-3 rounded-xl border border-slate-200/70 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] uppercase font-extrabold text-slate-500 flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm text-sky-600">location_on</span>
+                  <span>Dirección de Entrega</span>
+                </span>
+                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-sky-100 text-sky-800">
+                  {{ d.neighborhood or 'Cartagena' }}
+                </span>
+              </div>
+              <p class="font-bold text-slate-900 text-sm leading-snug">
+                {{ d.address }}
+              </p>
+              <div class="flex items-center justify-between text-[11px] text-slate-600 pt-1 border-t border-slate-200/60">
+                <span class="font-medium truncate">Destinatario: <b class="text-slate-800">{{ d.recipient_name }}</b></span>
+                <span class="flex items-center gap-1 shrink-0 font-medium"><span class="material-symbols-outlined text-xs text-slate-400">call</span>{{ d.recipient_phone }}</span>
+              </div>
+            </div>
+
+            <!-- Bloque 2: Repartidor Asignado -->
+            <div class="p-3 rounded-xl border {% if d.route_stop and d.route_stop.route and d.route_stop.route.driver %}bg-sky-50/40 border-sky-200/80{% else %}bg-slate-50/60 border-slate-200/70{% endif %} space-y-1.5 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] uppercase font-extrabold text-slate-500 flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm text-indigo-600">badge</span>
+                  <span>Repartidor Asignado</span>
+                </span>
+                {% if d.route_stop and d.route_stop.route and d.route_stop.route.driver %}
+                <span class="text-[10px] font-black px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                  Ruta {{ d.route_stop.route.code }}
+                </span>
+                {% else %}
+                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
+                  Sin Asignar
+                </span>
+                {% endif %}
+              </div>
+
+              {% if d.route_stop and d.route_stop.route and d.route_stop.route.driver %}
+              <div class="flex items-center gap-2.5">
+                <div class="h-8 w-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  {{ d.route_stop.route.driver.name[:2]|upper }}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="font-bold text-slate-900 truncate">{{ d.route_stop.route.driver.name }}</p>
+                  <p class="text-[11px] text-slate-500 truncate">
+                    {{ d.route_stop.route.driver.vehicle_type }} • Placa: <b class="font-mono text-slate-700">{{ d.route_stop.route.driver.vehicle_plate }}</b>
+                  </p>
+                </div>
+              </div>
+              {% else %}
+              <div class="flex items-center justify-between text-slate-500 py-1">
+                <span class="text-xs italic text-slate-400">Ningún conductor asignado aún</span>
+                <button onclick="quickAssignSingle({{ d.id }}, '{{ d.tracking_code }}')" class="px-2.5 py-1 rounded-lg bg-sky-600 text-white font-bold hover:bg-sky-500 transition text-[11px] shadow-xs">
+                  Asignar ahora
+                </button>
+              </div>
+              {% endif %}
+            </div>
+
+          </div>
+
+          <!-- Bottom Card Row: Tipo de Paquete, Peso, Horario y Acción -->
+          <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-3 text-slate-500 text-[11px]">
+              <span class="inline-flex items-center gap-1 font-medium">
+                <span class="material-symbols-outlined text-xs text-slate-400">package_2</span>
+                <span>{{ d.package_type|replace('_', ' ') }}</span>
+              </span>
+              <span>•</span>
+              <span class="font-bold text-slate-700">{{ d.weight_kg }} kg</span>
+              <span>•</span>
+              <span class="text-slate-500">Horario: <b>{{ d.time_window_start }} - {{ d.time_window_end }}</b></span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button onclick="quickAssignSingle({{ d.id }}, '{{ d.tracking_code }}')" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 border border-slate-200 transition text-xs">
+                <span class="material-symbols-outlined text-sm">swap_horiz</span>
+                <span>Reasignar Conductor</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+        {% else %}
+        <div class="bg-white p-12 rounded-2xl border border-slate-200/80 text-center space-y-3">
+          <span class="material-symbols-outlined text-4xl text-slate-300">inventory_2</span>
+          <h3 class="font-heading font-bold text-base text-slate-800">No hay envíos registrados hoy</h3>
+          <p class="text-xs text-slate-500">Crea nuevos envíos para comenzar a coordinar y despachar rutas.</p>
+          <a href="/entregas/nueva" class="inline-block px-4 py-2 rounded-xl bg-sky-600 text-white text-xs font-bold hover:bg-sky-500">Registrar Primer Envío</a>
+        </div>
+        {% endfor %}
+      </div>
+
+    </div>
+
+    <!-- Right Section: Conductores / Flota y Rutas Activas (5 cols) -->
+    <div class="lg:col-span-5 space-y-5" id="flota-repartidores">
+      
+      <!-- Drivers Fleet Card -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
+        <div class="p-4 px-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-sky-600">groups</span>
+            <h2 class="font-heading font-bold text-sm text-slate-900 uppercase tracking-wider">Flota de Conductores</h2>
+          </div>
+          <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
+            {{ drivers|length }} Registrados
+          </span>
+        </div>
+
+        <div class="p-4 space-y-3.5 max-h-[460px] overflow-y-auto">
+          {% for drv in drivers %}
+          <div class="p-3.5 rounded-xl border border-slate-200/80 hover:border-sky-300 bg-slate-50/40 hover:bg-white transition-all space-y-2.5">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-950 text-white flex items-center justify-center font-heading font-bold text-xs shadow-sm">
+                  {{ drv.name[:2]|upper }}
+                </div>
+                <div>
+                  <h4 class="font-heading font-bold text-xs text-slate-900">{{ drv.name }}</h4>
+                  <p class="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                    <span class="material-symbols-outlined text-xs">call</span>
+                    <span>{{ drv.phone }}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                {% if drv.status == 'EN_RUTA' %}
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-sky-50 text-sky-700 border border-sky-200">
+                  <span class="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse"></span> EN RUTA
+                </span>
+                {% elif drv.status == 'DISPONIBLE' %}
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> DISPONIBLE
+                </span>
+                {% else %}
+                <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 text-slate-600">
+                  {{ drv.status }}
+                </span>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Vehicle and Capacity Specs -->
+            <div class="grid grid-cols-3 gap-2 pt-1 text-[11px] text-slate-600">
+              <div class="bg-white p-2 rounded-lg border border-slate-100">
+                <span class="text-[9px] font-bold text-slate-400 block uppercase">Vehículo</span>
+                <span class="font-bold text-slate-800">{{ drv.vehicle_type }}</span>
+              </div>
+              <div class="bg-white p-2 rounded-lg border border-slate-100">
+                <span class="text-[9px] font-bold text-slate-400 block uppercase">Placa</span>
+                <span class="font-bold text-slate-800 font-mono">{{ drv.vehicle_plate }}</span>
+              </div>
+              <div class="bg-white p-2 rounded-lg border border-slate-100">
+                <span class="text-[9px] font-bold text-slate-400 block uppercase">Capacidad</span>
+                <span class="font-bold text-slate-800">{{ drv.capacity_kg }} kg</span>
+              </div>
+            </div>
+
+            <!-- Quick Action: Dispatch or Route Link -->
+            <div class="pt-1 flex items-center justify-between text-xs">
+              <span class="text-[11px] text-amber-500 font-bold flex items-center gap-0.5">
+                <span class="material-symbols-outlined text-xs">star</span>
+                <span>{{ drv.rating or '5.0' }}</span>
+              </span>
+
+              <a href="/rutas/optimizar" class="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1">
+                <span>Asignar Ruta Nueva</span>
+                <span class="material-symbols-outlined text-xs">arrow_forward</span>
+              </a>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Active Routes & Dispatch Status Card -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
+        <div class="p-4 px-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-emerald-600">route</span>
+            <h2 class="font-heading font-bold text-sm text-slate-900 uppercase tracking-wider">Rutas en Ejecución Hoy</h2>
+          </div>
+          <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            {{ active_routes|length }} Activas
+          </span>
+        </div>
+
+        <div class="p-4 space-y-3 max-h-[380px] overflow-y-auto">
+          {% for r in active_routes %}
+          <div class="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-xs font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                {{ r.code }}
+              </span>
+              <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-sky-100 text-sky-800">
+                {{ r.status }}
+              </span>
+            </div>
+            <h4 class="font-heading font-bold text-xs text-slate-800">{{ r.name }}</h4>
+            
+            <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+              <span>Conductor: <b class="text-slate-700">{{ r.driver.name if r.driver else 'Sin asignar' }}</b></span>
+              <span><b>{{ r.completed_stops }}</b> de <b>{{ r.total_stops }}</b> paradas</span>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+              <div class="bg-emerald-500 h-1.5 rounded-full transition-all" style="width: {% if r.total_stops > 0 %}{{ (r.completed_stops / r.total_stops) * 100 }}{% else %}0{% endif %}%"></div>
+            </div>
+
+            <div class="pt-1 flex items-center justify-between text-xs">
+              <span class="text-[11px] text-slate-400">{{ r.total_distance_km }} km aprox.</span>
+              <a href="/repartidor/ruta-activa?route_id={{ r.id }}" class="text-sky-600 hover:text-sky-700 font-bold flex items-center gap-1 text-[11px]">
+                <span>Ver App Repartidor</span>
+                <span class="material-symbols-outlined text-xs">open_in_new</span>
+              </a>
+            </div>
+          </div>
+          {% else %}
+          <div class="text-center py-6 text-slate-400 text-xs">
+            No hay rutas activas en despacho en este momento.
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Modal para Asignación de Envíos a Conductor / Repartidor -->
+<div id="assignModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <span class="h-9 w-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
+          <span class="material-symbols-outlined text-lg">local_shipping</span>
+        </span>
+        <h3 class="font-heading font-bold text-base text-slate-900">Asignar Envíos a Conductor</h3>
+      </div>
+      <button onclick="closeAssignModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+        <span class="material-symbols-outlined text-lg">close</span>
+      </button>
+    </div>
+
+    <p class="text-xs text-slate-500">
+      Selecciona el conductor de la flota al cual deseas despachar los envíos seleccionados.
+    </p>
+
+    <div>
+      <label class="block text-xs font-bold text-slate-700 mb-1.5">Conductor Responsable</label>
+      <select id="modalDriverSelect" class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium">
+        <option value="">Selecciona un conductor...</option>
+        {% for drv in drivers %}
+        <option value="{{ drv.id }}">
+          {{ drv.name }} — {{ drv.vehicle_type }} ({{ drv.vehicle_plate }}) - {{ drv.status }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-xs font-bold text-slate-700 mb-1.5">Nombre de la Ruta / Despacho</label>
+      <input type="text" id="modalRouteName" value="Ruta Cartagena - Despacho Diario" class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"/>
+    </div>
+
+    <div class="p-3 bg-sky-50 rounded-xl border border-sky-100 text-xs text-sky-800 space-y-1">
+      <p class="font-bold flex items-center gap-1">
+        <span class="material-symbols-outlined text-sm">route</span>
+        <span id="modalSelectedSummary">0 envíos seleccionados</span>
+      </p>
+      <p class="text-[11px] text-sky-700">El motor calculará la secuencia y la ruta quedará disponible inmediatamente en la aplicación del repartidor.</p>
+    </div>
+
+    <div class="flex items-center justify-end gap-2.5 pt-2">
+      <button onclick="closeAssignModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition">
+        Cancelar
+      </button>
+      <button onclick="submitAssignAndCreateRoute()" id="btnSubmitAssign" class="px-5 py-2 text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white rounded-xl shadow-md shadow-sky-600/20 transition flex items-center gap-2">
+        <span class="material-symbols-outlined text-sm">check_circle</span>
+        <span>Confirmar y Despachar</span>
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let selectedDeliveryIds = [];
+
+  function filterDeliveries() {
+    const searchVal = document.getElementById('searchInput').value.toLowerCase().trim();
+    const statusVal = document.getElementById('statusFilter').value;
+    const neighborhoodVal = document.getElementById('neighborhoodFilter').value;
+
+    const cards = document.querySelectorAll('.delivery-card');
+    let visibleCount = 0;
+
+    cards.forEach(card => {
+      const code = card.dataset.code || '';
+      const recipient = card.dataset.recipient || '';
+      const address = card.dataset.address || '';
+      const neighborhood = card.dataset.neighborhood || '';
+      const status = card.dataset.status || '';
+
+      const matchesSearch = !searchVal || code.includes(searchVal) || recipient.includes(searchVal) || address.includes(searchVal) || neighborhood.toLowerCase().includes(searchVal);
+      const matchesStatus = statusVal === 'ALL' || status === statusVal;
+      const matchesNeighborhood = neighborhoodVal === 'ALL' || neighborhood.toLowerCase().includes(neighborhoodVal.toLowerCase());
+
+      if (matchesSearch && matchesStatus && matchesNeighborhood) {
+        card.classList.remove('hidden');
+        visibleCount++;
+      } else {
+        card.classList.add('hidden');
+      }
+    });
+
+    const visibleCounterEl = document.getElementById('visibleDeliveriesCount');
+    if (visibleCounterEl) visibleCounterEl.innerText = visibleCount;
+  }
+
+  function handleSingleSelect() {
+    const checkboxes = document.querySelectorAll('.card-checkbox:checked');
+    selectedDeliveryIds = Array.from(checkboxes).map(c => parseInt(c.value));
+    
+    const counterBadge = document.getElementById('selectedCounterBadge');
+    if (counterBadge) {
+      if (selectedDeliveryIds.length > 0) {
+        counterBadge.classList.remove('hidden');
+        counterBadge.innerText = `${selectedDeliveryIds.length} seleccionados`;
+      } else {
+        counterBadge.classList.add('hidden');
+      }
+    }
+  }
+
+  function toggleSelectAll() {
+    const isChecked = document.getElementById('selectAllCheckbox').checked;
+    const visibleCards = document.querySelectorAll('.delivery-card:not(.hidden) .card-checkbox');
+    visibleCards.forEach(c => c.checked = isChecked);
+    handleSingleSelect();
+  }
+
+  function openBatchAssignModal() {
+    handleSingleSelect();
+    if (selectedDeliveryIds.length === 0) {
+      // Auto select all pending if none selected
+      const pendingCheckboxes = document.querySelectorAll('.delivery-card[data-status="PENDIENTE"]:not(.hidden) .card-checkbox');
+      if (pendingCheckboxes.length > 0) {
+        pendingCheckboxes.forEach(c => c.checked = true);
+        handleSingleSelect();
+      } else {
+        showNotification('Por favor selecciona al menos un envío para asignar.', 'error');
+        return;
+      }
+    }
+
+    document.getElementById('modalSelectedSummary').innerText = `${selectedDeliveryIds.length} encomiendas seleccionadas`;
+    document.getElementById('assignModal').classList.remove('hidden');
+  }
+
+  function quickAssignSingle(deliveryId, trackingCode) {
+    selectedDeliveryIds = [deliveryId];
+    document.querySelectorAll('.card-checkbox').forEach(c => c.checked = (parseInt(c.value) === deliveryId));
+    handleSingleSelect();
+    document.getElementById('modalSelectedSummary').innerText = `Envío ${trackingCode} seleccionado`;
+    document.getElementById('assignModal').classList.remove('hidden');
+  }
+
+  function closeAssignModal() {
+    document.getElementById('assignModal').classList.add('hidden');
+  }
+
+  async function submitAssignAndCreateRoute() {
+    const driverId = document.getElementById('modalDriverSelect').value;
+    const routeName = document.getElementById('modalRouteName').value.trim() || 'Ruta Despachada';
+
+    if (!driverId) {
+      showNotification('Por favor selecciona un conductor de la flota.', 'error');
+      return;
+    }
+
+    if (selectedDeliveryIds.length === 0) {
+      showNotification('No hay envíos seleccionados.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btnSubmitAssign');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="material-symbols-outlined text-sm animate-spin">refresh</span><span>Despachando...</span>`;
+
+    try {
+      const resp = await fetch('/api/routes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: routeName,
+          driver_id: parseInt(driverId),
+          delivery_ids: selectedDeliveryIds,
+          depot_lat: 10.4075,
+          depot_lng: -75.5342
+        })
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Error al asignar los envíos al conductor');
+      }
+
+      const created = await resp.json();
+      showNotification(`¡Envíos asignados exitosamente al conductor! Ruta ${created.code} activa.`);
+      closeAssignModal();
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      showNotification(err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = `<span class="material-symbols-outlined text-sm">check_circle</span><span>Confirmar y Despachar</span>`;
+    }
+  }
+
+  async function triggerRandomDistributionCoordinator() {
+    const btn = document.getElementById('btnRandomDistributeCoord');
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="material-symbols-outlined text-sm animate-spin">refresh</span><span>Asignando...</span>`;
+
+    try {
+      const response = await fetch('/api/routes/distribute-random', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        showNotification(data.message || '¡Envíos distribuidos aleatoriamente a todos los repartidores!');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      } else {
+        showNotification(data.detail || 'Ocurrió un error al reasignar envíos', 'error');
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification('Error de conexión con el servidor', 'error');
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+</script>
+{% endblock %}

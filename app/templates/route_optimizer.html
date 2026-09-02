@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+
+{% block title %}Optimización de Ruta Logística - GTR{% endblock %}
+{% block breadcrumb %}Optimizar Rutas{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+
+  <!-- Header Banner -->
+  <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="p-2 rounded-xl bg-sky-50 text-sky-600 border border-sky-100">
+          <span class="material-symbols-outlined text-xl">alt_route</span>
+        </span>
+        <h1 class="font-heading text-2xl font-bold text-slate-900 tracking-tight">Motor de Optimización de Rutas</h1>
+      </div>
+      <p class="text-sm text-slate-500 mt-1">Cálculo de secuencia óptima de entrega, minimización de distancia (km) y tiempos de tránsito.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="btnOptimize" onclick="runOptimization()" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-600 text-white text-xs font-semibold hover:bg-sky-500 transition shadow-md shadow-sky-600/20">
+        <span class="material-symbols-outlined text-base">auto_mode</span>
+        <span>Ejecutar Algoritmo TSP</span>
+      </button>
+      <button id="btnDispatch" onclick="saveAndDispatchRoute()" disabled class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition shadow-sm opacity-50 cursor-not-allowed">
+        <span class="material-symbols-outlined text-base text-emerald-400">send</span>
+        <span>Despachar a Repartidor</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 2 Column Layout: Settings & Stops List (Left) | Interactive Route Map (Right) -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Left Controls & Stops (5 cols) -->
+    <div class="lg:col-span-5 space-y-5">
+      
+      <!-- Route Config Card -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+        <h2 class="font-heading font-bold text-sm text-slate-900 uppercase tracking-wider text-slate-400">Parámetros de Despacho</h2>
+        
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nombre de la Ruta</label>
+          <input type="text" id="routeName" value="Ruta Norte Cartagena - Matutina" class="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium"/>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Asignar Repartidor</label>
+            <select id="driverSelect" class="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium">
+              <option value="">Seleccionar repartidor...</option>
+              {% for d in drivers %}
+              <option value="{{ d.id }}">{{ d.name }} ({{ d.vehicle_type }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Punto de Salida / Hub</label>
+            <input type="text" id="depotName" value="Centro Logístico GTR (Manga)" readonly class="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-600 font-medium"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metrics Preview Card (Hidden until optimized) -->
+      <div id="metricsCard" class="hidden bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 shadow-xl space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Métricas de la Ruta Optimizada</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">TSP Optimizado</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3 pt-2 text-center">
+          <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+            <p class="text-[10px] text-slate-400">Paradas</p>
+            <p id="metricStops" class="font-heading font-extrabold text-xl text-white mt-0.5">0</p>
+          </div>
+          <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+            <p class="text-[10px] text-slate-400">Distancia</p>
+            <p id="metricDistance" class="font-heading font-extrabold text-xl text-sky-400 mt-0.5">0 km</p>
+          </div>
+          <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
+            <p class="text-[10px] text-slate-400">Duración Est.</p>
+            <p id="metricDuration" class="font-heading font-extrabold text-xl text-emerald-400 mt-0.5">0 min</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Deliveries Selection & Order List -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
+        <div class="p-4 px-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div class="flex items-center gap-2">
+            <span class="font-heading font-bold text-xs text-slate-900 uppercase tracking-wider">Paradas / Envíos Disponibles</span>
+            <span id="selectedCountBadge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700">0 seleccionadas</span>
+          </div>
+          <button onclick="toggleSelectAll()" class="text-xs font-semibold text-sky-600 hover:text-sky-700">Seleccionar todos</button>
+        </div>
+
+        <div id="stopsListContainer" class="p-3 space-y-2 max-h-[480px] overflow-y-auto">
+          {% for delivery in pending_deliveries %}
+          <div class="delivery-item p-3.5 rounded-xl border border-slate-200/80 hover:border-sky-300 bg-white hover:bg-sky-50/30 transition-all flex items-start gap-3 cursor-pointer" onclick="toggleItemCheck(event, {{ delivery.id }})">
+            <input type="checkbox" value="{{ delivery.id }}" checked onchange="updateSelectedCount()" class="delivery-checkbox mt-1 h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"/>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-mono text-xs font-bold text-slate-900">{{ delivery.tracking_code }}</span>
+                {% if delivery.priority == 'ALTA' %}
+                <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-rose-50 text-rose-700 border border-rose-200">ALTA</span>
+                {% else %}
+                <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-slate-100 text-slate-600">{{ delivery.priority }}</span>
+                {% endif %}
+              </div>
+              <p class="text-xs font-semibold text-slate-800 mt-0.5 truncate">{{ delivery.recipient_name }}</p>
+              <p class="text-[11px] text-slate-500 truncate">{{ delivery.address }} ({{ delivery.neighborhood or 'Cartagena' }})</p>
+            </div>
+          </div>
+          {% else %}
+          <div class="text-center py-10 px-4">
+            <span class="material-symbols-outlined text-3xl text-slate-300">inventory_2</span>
+            <p class="text-xs font-medium text-slate-400 mt-1">No hay envíos pendientes por asignar.</p>
+            <a href="/entregas/nueva" class="inline-block mt-3 text-xs font-semibold text-sky-600 hover:underline">Registrar nuevo envío</a>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Interactive Map & Route Waypoints (7 cols) -->
+    <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 shadow-sm flex flex-col overflow-hidden min-h-[580px]">
+      <div class="p-4 px-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-sky-600">navigation</span>
+          <h2 class="font-heading font-bold text-base text-slate-900">Trazado y Secuencia de Ruta</h2>
+        </div>
+        <span class="text-xs text-slate-500 font-medium">Cartagena de Indias</span>
+      </div>
+      
+      <div id="optimizerMap" class="w-full flex-1 min-h-[520px] z-10"></div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let optimizerMap;
+  let mapMarkers = [];
+  let routePolyline = null;
+  let optimizedData = null;
+
+  const pendingDeliveries = [
+    {% for d in pending_deliveries %}
+    {
+      id: {{ d.id }},
+      code: "{{ d.tracking_code }}",
+      recipient: "{{ d.recipient_name }}",
+      address: "{{ d.address }}",
+      neighborhood: "{{ d.neighborhood or 'Cartagena' }}",
+      lat: {{ d.latitude }},
+      lng: {{ d.longitude }},
+      priority: "{{ d.priority }}"
+    },
+    {% endfor %}
+  ];
+
+  document.addEventListener('DOMContentLoaded', function() {
+    initOptimizerMap();
+    updateSelectedCount();
+  });
+
+  function initOptimizerMap() {
+    const defaultLat = {{ settings.DEFAULT_LAT }};
+    const defaultLng = {{ settings.DEFAULT_LNG }};
+    optimizerMap = L.map('optimizerMap').setView([defaultLat, defaultLng], 13);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      maxZoom: 19
+    }).addTo(optimizerMap);
+
+    // Marker Centro Manga
+    const depotIcon = L.divIcon({
+      className: 'depot-pin',
+      html: `<div class="h-9 w-9 bg-slate-900 text-white rounded-xl shadow-xl flex items-center justify-center border-2 border-white"><span class="material-symbols-outlined text-base text-sky-400">warehouse</span></div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+    L.marker([10.4075, -75.5342], { icon: depotIcon })
+      .addTo(optimizerMap)
+      .bindPopup("<b>Centro Logístico GTR - Manga</b><br>Punto de Partida y Despacho");
+
+    renderInitialPins();
+  }
+
+  function renderInitialPins() {
+    clearMarkers();
+    pendingDeliveries.forEach((d) => {
+      const pin = L.divIcon({
+        className: 'pending-pin',
+        html: `<div class="h-7 w-7 bg-amber-500 text-white rounded-full shadow-md flex items-center justify-center border-2 border-white text-xs font-bold"><span class="material-symbols-outlined text-xs">location_on</span></div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+      const marker = L.marker([d.lat, d.lng], { icon: pin }).addTo(optimizerMap);
+      marker.bindPopup(`<b>${d.code}</b><br>${d.recipient}<br><span class="text-xs text-slate-500">${d.address}</span>`);
+      mapMarkers.push(marker);
+    });
+  }
+
+  function clearMarkers() {
+    mapMarkers.forEach(m => optimizerMap.removeLayer(m));
+    mapMarkers = [];
+    if (routePolyline) {
+      optimizerMap.removeLayer(routePolyline);
+      routePolyline = null;
+    }
+  }
+
+  function toggleItemCheck(event, id) {
+    if (event.target.tagName === 'INPUT') return;
+    const checkbox = document.querySelector(`.delivery-checkbox[value="${id}"]`);
+    if (checkbox) {
+      checkbox.checked = !checkbox.checked;
+      updateSelectedCount();
+    }
+  }
+
+  function toggleSelectAll() {
+    const checkboxes = document.querySelectorAll('.delivery-checkbox');
+    const allChecked = Array.from(checkboxes).every(c => c.checked);
+    checkboxes.forEach(c => c.checked = !allChecked);
+    updateSelectedCount();
+  }
+
+  function updateSelectedCount() {
+    const checked = document.querySelectorAll('.delivery-checkbox:checked');
+    const badge = document.getElementById('selectedCountBadge');
+    if (badge) badge.innerText = `${checked.length} seleccionadas`;
+  }
+
+  async function runOptimization() {
+    const checked = Array.from(document.querySelectorAll('.delivery-checkbox:checked')).map(c => parseInt(c.value));
+    if (checked.length === 0) {
+      showNotification('Selecciona al menos una parada para optimizar.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btnOptimize');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="material-symbols-outlined text-base animate-spin">refresh</span><span>Optimizando...</span>`;
+
+    try {
+      const resp = await fetch('/api/routes/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: document.getElementById('routeName').value,
+          driver_id: document.getElementById('driverSelect').value ? parseInt(document.getElementById('driverSelect').value) : null,
+          delivery_ids: checked,
+          depot_lat: 10.4075,
+          depot_lng: -75.5342
+        })
+      });
+
+      if (!resp.ok) throw new Error('Error al ejecutar optimización');
+      optimizedData = await resp.json();
+
+      // Renderizar métricas
+      document.getElementById('metricsCard').classList.remove('hidden');
+      document.getElementById('metricStops').innerText = optimizedData.metrics.total_stops;
+      document.getElementById('metricDistance').innerText = `${optimizedData.metrics.total_distance_km} km`;
+      document.getElementById('metricDuration').innerText = formatDuration(optimizedData.metrics.estimated_duration_min);
+
+      // Renderizar paradas ordenadas en mapa
+      renderOptimizedMap(optimizedData);
+
+      // Habilitar botón de despacho
+      const dispatchBtn = document.getElementById('btnDispatch');
+      dispatchBtn.disabled = false;
+      dispatchBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      showNotification('Ruta optimizada con éxito con algoritmo TSP.');
+    } catch (err) {
+      showNotification(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<span class="material-symbols-outlined text-base">auto_mode</span><span>Ejecutar Algoritmo TSP</span>`;
+    }
+  }
+
+  function renderOptimizedMap(data) {
+    clearMarkers();
+
+    const bounds = L.latLngBounds([]);
+    bounds.extend([data.depot.latitude, data.depot.longitude]);
+
+    // Marcador de salida
+    const depotIcon = L.divIcon({
+      className: 'depot-pin',
+      html: `<div class="h-9 w-9 bg-slate-900 text-white rounded-xl shadow-xl flex items-center justify-center border-2 border-white"><span class="material-symbols-outlined text-base text-sky-400">warehouse</span></div>`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+    const depotM = L.marker([data.depot.latitude, data.depot.longitude], { icon: depotIcon })
+      .addTo(optimizerMap)
+      .bindPopup("<b>Centro Logístico GTR - Manga</b><br>Salida");
+    mapMarkers.push(depotM);
+
+    // Marcadores numerados en orden optimizado
+    data.stops.forEach((stop) => {
+      const lat = stop.delivery.latitude;
+      const lng = stop.delivery.longitude;
+      bounds.extend([lat, lng]);
+
+      const seqIcon = L.divIcon({
+        className: 'seq-pin',
+        html: `<div class="h-7 w-7 bg-sky-600 text-white rounded-full shadow-lg flex items-center justify-center border-2 border-white text-xs font-black">${stop.sequence_order}</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+
+      const marker = L.marker([lat, lng], { icon: seqIcon }).addTo(optimizerMap);
+      marker.bindPopup(`
+        <div class="text-xs">
+          <b class="text-sky-600">Parada #${stop.sequence_order}</b> - ETA: <b>${stop.estimated_arrival}</b><br>
+          <span class="font-bold text-slate-800">${stop.delivery.recipient_name}</span><br>
+          <span class="text-slate-500">${stop.delivery.address}</span><br>
+          <span class="text-slate-400">Distancia: +${stop.distance_from_prev_km} km</span>
+        </div>
+      `);
+      mapMarkers.push(marker);
+    });
+
+    // Dibujar polilínea OSRM o GeoJSON
+    if (data.geometry && data.geometry.coordinates) {
+      const latlngs = data.geometry.coordinates.map(c => [c[1], c[0]]);
+      routePolyline = L.polyline(latlngs, {
+        color: '#0ea5e9',
+        weight: 5,
+        opacity: 0.85,
+        lineJoin: 'round'
+      }).addTo(optimizerMap);
+    }
+
+    optimizerMap.fitBounds(bounds, { padding: [40, 40] });
+  }
+
+  async function saveAndDispatchRoute() {
+    if (!optimizedData) return;
+    const driverId = document.getElementById('driverSelect').value;
+    if (!driverId) {
+      showNotification('Por favor asigna un repartidor a la ruta antes de despachar.', 'error');
+      return;
+    }
+
+    const checked = Array.from(document.querySelectorAll('.delivery-checkbox:checked')).map(c => parseInt(c.value));
+    const btn = document.getElementById('btnDispatch');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="material-symbols-outlined text-base animate-spin">refresh</span><span>Despachando...</span>`;
+
+    try {
+      const resp = await fetch('/api/routes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: document.getElementById('routeName').value,
+          driver_id: parseInt(driverId),
+          delivery_ids: checked,
+          depot_lat: 10.4075,
+          depot_lng: -75.5342
+        })
+      });
+
+      if (!resp.ok) throw new Error('Error al guardar la ruta en PostgreSQL');
+      const created = await resp.json();
+      showNotification(`¡Ruta ${created.code} guardada y despachada exitosamente!`);
+      setTimeout(() => {
+        window.location.href = `/repartidor/ruta-activa?route_id=${created.id}`;
+      }, 1200);
+    } catch (err) {
+      showNotification(err.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = `<span class="material-symbols-outlined text-base text-emerald-400">send</span><span>Despachar a Repartidor</span>`;
+    }
+  }
+</script>
+{% endblock %}

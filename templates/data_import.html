@@ -1,0 +1,889 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Carga Masiva de Envíos & Escáner QR / Barras - GTR Logistics{% endblock %}
+{% block breadcrumb %}Carga de Datos & Lector de Etiquetas QR / Barras{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-[1600px] mx-auto space-y-6">
+
+  <!-- Header Banner -->
+  <div class="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex items-start gap-3.5 min-w-0">
+      <div class="h-12 w-12 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-sky-500/20 shrink-0">
+        <span class="material-symbols-outlined text-2xl">qr_code_scanner</span>
+      </div>
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="font-heading text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Carga de Datos & Lector de Etiquetas</h1>
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+            Excel • CSV • JSON • QR / Barras
+          </span>
+        </div>
+        <p class="text-xs sm:text-sm text-slate-500 mt-1">
+          Ingresa encomiendas de forma masiva mediante archivos de datos o escanea etiquetas logísticas con lector de código de barras / cámara QR.
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+      <a href="/api/deliveries/download-template?format=xlsx" class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition shadow-sm cursor-pointer">
+        <span class="material-symbols-outlined text-base">table_view</span>
+        <span>Descargar Plantilla Excel</span>
+      </a>
+      <a href="/api/deliveries/download-template?format=csv" class="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-800 text-white text-xs font-semibold hover:bg-slate-900 transition shadow-sm">
+        <span class="material-symbols-outlined text-base">description</span>
+        <span>Plantilla CSV</span>
+      </a>
+      <a href="/coordinacion" class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition">
+        <span class="material-symbols-outlined text-base">local_shipping</span>
+        <span>Ver Envíos del Día</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Navigation Tabs (Modo de Ingreso) -->
+  <div class="flex border-b border-slate-200 gap-3">
+    <button onclick="switchTab('file-import')" id="tabBtnFile" class="tab-btn flex items-center gap-2 pb-3 px-3 text-sm font-bold border-b-2 border-sky-600 text-sky-600 cursor-pointer transition">
+      <span class="material-symbols-outlined text-lg">upload_file</span>
+      <span>Carga Masiva por Archivos (Excel / CSV / JSON)</span>
+    </button>
+    <button onclick="switchTab('scanner-mode')" id="tabBtnScanner" class="tab-btn flex items-center gap-2 pb-3 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition">
+      <span class="material-symbols-outlined text-lg">barcode_scanner</span>
+      <span>Escáner QR & Código de Barras en Vivo</span>
+      <span class="px-1.5 py-0.2 rounded text-[10px] font-black bg-rose-100 text-rose-700 animate-pulse">EN VIVO</span>
+    </button>
+  </div>
+
+  <!-- TAB 1: CARGA MASIVA DE ARCHIVOS -->
+  <div id="tabContentFile" class="space-y-6">
+    
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      
+      <!-- Upload Dropzone Area (xl:col-span-5) -->
+      <div class="xl:col-span-5 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-heading text-base font-bold text-slate-900 flex items-center gap-2">
+            <span class="material-symbols-outlined text-sky-600">file_upload</span>
+            <span>Importar Archivo de Encomiendas</span>
+          </h2>
+          <span class="text-[11px] font-bold text-slate-400 uppercase">Paso 1 de 2</span>
+        </div>
+
+        <div id="dropArea" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)"
+             class="border-2 border-dashed border-sky-200 hover:border-sky-500 rounded-2xl p-6 sm:p-8 text-center bg-sky-50/30 hover:bg-sky-50/60 transition-all cursor-pointer space-y-3">
+          <input type="file" id="fileInput" accept=".xlsx, .xls, .csv, .json, .txt" class="hidden" onchange="handleFileSelected(event)">
+          
+          <div class="h-16 w-16 mx-auto rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center shadow-inner">
+            <span class="material-symbols-outlined text-3xl">upload_file</span>
+          </div>
+
+          <div>
+            <p class="font-heading font-bold text-sm text-slate-800">
+              Arrastra y suelta tu archivo aquí o <span class="text-sky-600 underline">selecciónalo</span>
+            </p>
+            <p class="text-xs text-slate-400 mt-1">
+              Formatos soportados: <b>Microsoft Excel (.xlsx, .xls)</b>, <b>CSV (.csv)</b>, <b>JSON (.json)</b>
+            </p>
+          </div>
+
+          <button type="button" onclick="document.getElementById('fileInput').click()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 text-white font-bold text-xs hover:bg-sky-500 transition shadow-sm cursor-pointer">
+            <span class="material-symbols-outlined text-sm">folder_open</span>
+            <span>Examinar en mi Equipo</span>
+          </button>
+        </div>
+
+        <!-- Archivo Seleccionado Info -->
+        <div id="fileInfoBox" class="hidden p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="h-9 w-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+              <span class="material-symbols-outlined text-lg" id="fileIcon">description</span>
+            </div>
+            <div class="min-w-0">
+              <p class="font-bold text-xs text-slate-800 truncate" id="fileName">archivo.xlsx</p>
+              <p class="text-[10px] text-slate-400" id="fileSize">0 KB</p>
+            </div>
+          </div>
+          <button onclick="clearSelectedFile()" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer">
+            <span class="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+
+        <!-- Instrucciones & Columnas Requeridas -->
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2.5 text-xs text-slate-600">
+          <p class="font-bold text-slate-800 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm text-sky-600">info</span>
+            <span>Estructura de Columnas de la Plantilla:</span>
+          </p>
+          <ul class="grid grid-cols-2 gap-1 text-[11px] text-slate-500">
+            <li>• <b class="text-slate-700">tracking_code</b> (Guía)</li>
+            <li>• <b class="text-slate-700">package_type</b> (Tipo)</li>
+            <li>• <b class="text-slate-700">recipient_name</b> (Destinatario)</li>
+            <li>• <b class="text-slate-700">recipient_phone</b> (Teléfono)</li>
+            <li>• <b class="text-slate-700">address</b> (Dirección)</li>
+            <li>• <b class="text-slate-700">neighborhood</b> (Barrio Cartagena)</li>
+            <li>• <b class="text-slate-700">sender_name</b> (Remitente)</li>
+            <li>• <b class="text-slate-700">weight_kg</b> (Peso en kg)</li>
+            <li>• <b class="text-slate-700">priority</b> (ALTA / MEDIA)</li>
+            <li>• <b class="text-slate-700">reference_point</b> (GPS / Referencia)</li>
+          </ul>
+          <p class="text-[10px] text-slate-400 italic pt-1 border-t border-slate-200">
+            * El sistema auto-asigna coordenadas geográficas óptimas en Cartagena según el barrio especificado.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- Live Preview & Import Table (xl:col-span-7) -->
+      <div class="xl:col-span-7 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+        
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div>
+            <h2 class="font-heading text-base font-bold text-slate-900 flex items-center gap-2">
+              <span class="material-symbols-outlined text-emerald-600">preview</span>
+              <span>Previsualización de Registros a Importar</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Valida los datos leídos antes de confirmarlos en la base de datos de despacho.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span id="recordsBadge" class="px-2.5 py-1 rounded-full text-xs font-black bg-slate-100 text-slate-700">
+              0 registros
+            </span>
+            <button id="btnConfirmImport" onclick="submitBulkImport()" disabled
+                    class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 disabled:bg-slate-200 text-white disabled:text-slate-400 font-bold text-xs hover:bg-emerald-700 transition shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-sm">cloud_upload</span>
+              <span>Confirmar e Importar</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tabla de Previsualización -->
+        <div class="overflow-x-auto max-h-[500px] border border-slate-100 rounded-xl">
+          <table class="w-full text-left text-xs text-slate-600" id="previewTable">
+            <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 tracking-wider sticky top-0 border-b border-slate-200">
+              <tr>
+                <th class="px-3.5 py-2.5">#</th>
+                <th class="px-3.5 py-2.5">Guía / ID</th>
+                <th class="px-3.5 py-2.5">Destinatario</th>
+                <th class="px-3.5 py-2.5">Dirección & Barrio</th>
+                <th class="px-3.5 py-2.5">Tipo / Peso</th>
+                <th class="px-3.5 py-2.5">Prioridad</th>
+                <th class="px-3.5 py-2.5">Remitente</th>
+              </tr>
+            </thead>
+            <tbody id="previewTableBody" class="divide-y divide-slate-100">
+              <tr id="emptyPreviewRow">
+                <td colspan="7" class="px-6 py-12 text-center text-slate-400">
+                  <span class="material-symbols-outlined text-3xl text-slate-300 block mb-1">table_rows</span>
+                  Carga un archivo Excel, CSV o JSON en el panel izquierdo para ver la previsualización de las encomiendas.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Import Results Alert Box -->
+        <div id="importResultAlert" class="hidden p-4 rounded-xl border"></div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- TAB 2: ESCÁNER DE CÓDIGOS DE BARRAS & QR EN VIVO -->
+  <div id="tabContentScanner" class="hidden space-y-6">
+    
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+      
+      <!-- Live Camera & Gun Scanner Area (xl:col-span-5) -->
+      <div class="xl:col-span-5 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+        
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-rose-600">videocam</span>
+            <h2 class="font-heading text-base font-bold text-slate-900">Cámara & Pistola Lectora</h2>
+          </div>
+          <span class="flex items-center gap-1 text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Listo para Escanear
+          </span>
+        </div>
+
+        <!-- Camera Viewport / Scanner UI -->
+        <div class="relative bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-inner flex flex-col items-center justify-center min-h-[300px]">
+          
+          <div id="reader" class="w-full h-full min-h-[280px]"></div>
+
+          <!-- Overlay Scanner Target -->
+          <div id="scannerOverlay" class="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div class="w-48 h-48 sm:w-56 sm:h-56 border-2 border-sky-400 rounded-2xl relative shadow-lg shadow-sky-500/20 animate-pulse">
+              <div class="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-sky-400"></div>
+              <div class="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-sky-400"></div>
+              <div class="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-sky-400"></div>
+              <div class="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-sky-400"></div>
+            </div>
+          </div>
+
+          <!-- Controls under camera -->
+          <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 bg-slate-900/80 backdrop-blur-md p-2 rounded-xl border border-slate-700/60 text-white text-xs">
+            <button type="button" onclick="startCameraScanner()" id="btnStartCamera" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 font-bold flex items-center gap-1 cursor-pointer">
+              <span class="material-symbols-outlined text-sm">camera_alt</span>
+              <span>Iniciar Cámara</span>
+            </button>
+
+            <button type="button" onclick="stopCameraScanner()" id="btnStopCamera" class="hidden px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 font-bold flex items-center gap-1 cursor-pointer">
+              <span class="material-symbols-outlined text-sm">videocam_off</span>
+              <span>Detener</span>
+            </button>
+
+            <span class="text-[10px] text-slate-400 truncate">Apunta la etiqueta del paquete</span>
+          </div>
+
+        </div>
+
+        <!-- Modo Pistola Lectora USB / Bluetooth (Keyboard Wedge) -->
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-2">
+          <label class="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-sm text-indigo-600">barcode_reader</span>
+            <span>Entrada Directa de Pistola Lectora / Entrada Manual:</span>
+          </label>
+          <div class="flex gap-2">
+            <input type="text" id="barcodeGunInput" placeholder="Escanea o escribe el código de la etiqueta..."
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();processScannedCode(this.value);}"
+                   class="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white font-mono">
+            <button type="button" onclick="processScannedCode(document.getElementById('barcodeGunInput').value)"
+                    class="px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition cursor-pointer">
+              Procesar
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-400">
+            * Al usar pistola lectora USB, el código se captura automáticamente al presionar el gatillo.
+          </p>
+        </div>
+
+        <!-- Ejemplos Rápidos para Prueba Inmediata -->
+        <div class="p-3 rounded-xl bg-sky-50/50 border border-sky-200/60 space-y-1.5 text-xs">
+          <p class="font-bold text-sky-900 text-[11px] uppercase">Ejemplos de Etiquetas de Demostración:</p>
+          <div class="flex flex-wrap gap-1.5">
+            <button onclick="loadSampleQR(1)" class="px-2 py-1 bg-white border border-sky-200 rounded text-[10px] font-bold text-sky-800 hover:bg-sky-100">
+              🏷️ Paquete Centro Histórico
+            </button>
+            <button onclick="loadSampleQR(2)" class="px-2 py-1 bg-white border border-sky-200 rounded text-[10px] font-bold text-sky-800 hover:bg-sky-100">
+              🏷️ Documento Bocagrande
+            </button>
+            <button onclick="loadSampleQR(3)" class="px-2 py-1 bg-white border border-sky-200 rounded text-[10px] font-bold text-sky-800 hover:bg-sky-100">
+              🏷️ Refrigerado Manga
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Decoded Label Data Form (xl:col-span-7) -->
+      <div class="xl:col-span-7 bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+        
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            <h2 class="font-heading text-base font-bold text-slate-900 flex items-center gap-2">
+              <span class="material-symbols-outlined text-sky-600">receipt_long</span>
+              <span>Datos Extraídos de la Etiqueta</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+              Revisa los datos decodificados de la etiqueta y regístrala al despacho.
+            </p>
+          </div>
+
+          <div id="scanStatusBadge" class="hidden px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+            ✓ Etiqueta Decodificada
+          </div>
+        </div>
+
+        <form id="scannedDeliveryForm" onsubmit="saveScannedDelivery(event)" class="space-y-4">
+          
+          <!-- Fila 1: Guía, Tipo de Envío y Prioridad -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Código de Guía / ID *</label>
+              <input type="text" id="scanTracking" name="tracking_code" required
+                     class="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-slate-50/50">
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Tipo de Envío</label>
+              <select id="scanPackageType" name="package_type" class="w-full px-3 py-2 text-xs font-medium rounded-xl border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+                <option value="PAQUETE_PEQUEÑO">Paquete Pequeño</option>
+                <option value="PAQUETE_MEDIANO" selected>Paquete Mediano</option>
+                <option value="VOLUMINOSO">Voluminoso / Caja Grande</option>
+                <option value="REFRIGERADO">Refrigerado (Cadena de Frío)</option>
+                <option value="DOCUMENTO">Documento / Sobre</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Prioridad & Peso</label>
+              <div class="grid grid-cols-2 gap-1.5">
+                <select id="scanPriority" name="priority" class="px-2 py-2 text-xs font-bold rounded-xl border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+                  <option value="ALTA">Alta</option>
+                  <option value="MEDIA" selected>Media</option>
+                  <option value="BAJA">Baja</option>
+                </select>
+                <input type="number" step="0.1" id="scanWeight" name="weight_kg" placeholder="1.5 kg" value="1.5"
+                       class="px-2 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+              </div>
+            </div>
+          </div>
+
+          <!-- Fila 2: Datos del Remitente -->
+          <div class="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80 space-y-2.5">
+            <span class="text-[10px] font-black uppercase text-indigo-600 tracking-wider flex items-center gap-1">
+              <span class="material-symbols-outlined text-sm">business</span>
+              <span>Datos del Remitente / Origen</span>
+            </span>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Nombre o Empresa</label>
+                <input type="text" id="scanSenderName" name="sender_name" placeholder="Empresa / Remitente"
+                       class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Teléfono / Celular</label>
+                <input type="text" id="scanSenderPhone" name="sender_phone" placeholder="300 000 0000"
+                       class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">NIT o Cédula</label>
+                <input type="text" id="scanSenderDoc" name="sender_document" placeholder="900 123 456-1"
+                       class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+              </div>
+            </div>
+          </div>
+
+          <!-- Fila 3: Datos del Destinatario -->
+          <div class="p-3.5 rounded-xl bg-sky-50/40 border border-sky-200/60 space-y-2.5">
+            <span class="text-[10px] font-black uppercase text-sky-800 tracking-wider flex items-center gap-1">
+              <span class="material-symbols-outlined text-sm">person</span>
+              <span>Datos del Destinatario / Entrega</span>
+            </span>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Nombre Destinatario *</label>
+                <input type="text" id="scanRecipientName" name="recipient_name" required placeholder="Nombre completo"
+                       class="w-full px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Teléfono *</label>
+                <input type="text" id="scanRecipientPhone" name="recipient_phone" required placeholder="300 123 4567"
+                       class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-500 mb-0.5">Correo Electrónico</label>
+                <input type="email" id="scanRecipientEmail" name="recipient_email" placeholder="cliente@correo.com"
+                       class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+              </div>
+            </div>
+          </div>
+
+          <!-- Fila 4: Dirección, Barrio y Punto de Referencia -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Dirección de Entrega *</label>
+              <input type="text" id="scanAddress" name="address" required placeholder="Calle, Cra, Diagonal, Apto..."
+                     class="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Barrio / Zona (Cartagena)</label>
+              <select id="scanNeighborhood" name="neighborhood" class="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+                <option value="Centro Histórico">Centro Histórico</option>
+                <option value="Getsemaní">Getsemaní</option>
+                <option value="San Diego">San Diego</option>
+                <option value="Bocagrande">Bocagrande</option>
+                <option value="Castillogrande">Castillogrande</option>
+                <option value="El Laguito">El Laguito</option>
+                <option value="Manga">Manga</option>
+                <option value="Pie de la Popa">Pie de la Popa</option>
+                <option value="Torices">Torices</option>
+                <option value="Crespo">Crespo</option>
+                <option value="El Cabrero">El Cabrero</option>
+                <option value="Los Alpes">Los Alpes</option>
+                <option value="El Bosque">El Bosque</option>
+                <option value="Mamonal">Mamonal</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Punto de Referencia & Notas -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Punto de Referencia GPS</label>
+              <input type="text" id="scanReferencePoint" name="reference_point" placeholder="Ej: Frente al Baluarte, frente a la droguería..."
+                     class="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Notas / Indicaciones</label>
+              <input type="text" id="scanNotes" name="notes" placeholder="Ej: Timbrar citófono, paquete frágil..."
+                     class="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-sky-500 bg-white">
+            </div>
+          </div>
+
+          <!-- Botón de Guardado -->
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+            <button type="button" onclick="clearScannedForm()" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-600 font-semibold text-xs hover:bg-slate-200 transition cursor-pointer">
+              Limpiar Formulario
+            </button>
+            <button type="submit" id="btnSaveScanned" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-md shadow-sky-600/20 transition cursor-pointer active:scale-95">
+              <span class="material-symbols-outlined text-base">save</span>
+              <span>Guardar Envío en el Sistema</span>
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Recent Deliveries List -->
+  <div class="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="font-heading font-bold text-sm text-slate-900 uppercase tracking-wider">Últimos Envíos Registrados</h3>
+        <p class="text-xs text-slate-500">Encomiendas listas para asignación y despacho.</p>
+      </div>
+      <a href="/coordinacion" class="text-xs font-bold text-sky-600 hover:underline flex items-center gap-1">
+        <span>Ir a Coordinación</span>
+        <span class="material-symbols-outlined text-xs">arrow_forward</span>
+      </a>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 tracking-wider border-b border-slate-200">
+          <tr>
+            <th class="px-4 py-2.5">Guía / ID</th>
+            <th class="px-4 py-2.5">Destinatario</th>
+            <th class="px-4 py-2.5">Dirección & Barrio</th>
+            <th class="px-4 py-2.5">Remitente</th>
+            <th class="px-4 py-2.5">Tipo / Peso</th>
+            <th class="px-4 py-2.5">Prioridad</th>
+            <th class="px-4 py-2.5">Estado</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for d in recent_deliveries %}
+          <tr class="hover:bg-slate-50 transition">
+            <td class="px-4 py-3 font-mono font-bold text-slate-900">
+              <span class="px-1.5 py-0.5 rounded bg-slate-900 text-white text-[10px]">#{{ d.id }}</span>
+              {{ d.tracking_code }}
+            </td>
+            <td class="px-4 py-3">
+              <span class="font-bold text-slate-800 block">{{ d.recipient_name }}</span>
+              <span class="text-[10px] text-slate-400">{{ d.recipient_phone }}</span>
+            </td>
+            <td class="px-4 py-3">
+              <span class="text-slate-800 block">{{ d.address }}</span>
+              <span class="text-[10px] font-bold text-sky-600">{{ d.neighborhood|default:'Cartagena' }}</span>
+            </td>
+            <td class="px-4 py-3 text-slate-500">{{ d.sender_name|default:'Hub Central' }}</td>
+            <td class="px-4 py-3">
+              <span class="font-medium text-slate-700 block">{{ d.package_type }}</span>
+              <span class="text-[10px] text-slate-400">{{ d.weight_kg }} kg</span>
+            </td>
+            <td class="px-4 py-3">
+              <span class="px-1.5 py-0.5 rounded text-[9px] font-bold {% if d.priority == 'ALTA' %}bg-rose-50 text-rose-700 border border-rose-200{% else %}bg-sky-50 text-sky-700 border border-sky-200{% endif %}">
+                {{ d.priority }}
+              </span>
+            </td>
+            <td class="px-4 py-3">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                {{ d.status }}
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="px-4 py-6 text-center text-slate-400">No hay envíos registrados recientemente.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Scripts de SheetJS & Html5Qrcode -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<script>
+  let parsedRecords = [];
+  let selectedFileObject = null;
+  let html5QrScanner = null;
+
+  // Manejo de Pestañas
+  function switchTab(tabId) {
+    const fileTab = document.getElementById('tabContentFile');
+    const scanTab = document.getElementById('tabContentScanner');
+    const btnFile = document.getElementById('tabBtnFile');
+    const btnScan = document.getElementById('tabBtnScanner');
+
+    if (tabId === 'file-import') {
+      fileTab.classList.remove('hidden');
+      scanTab.classList.add('hidden');
+      btnFile.className = 'tab-btn flex items-center gap-2 pb-3 px-3 text-sm font-bold border-b-2 border-sky-600 text-sky-600 cursor-pointer transition';
+      btnScan.className = 'tab-btn flex items-center gap-2 pb-3 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition';
+      stopCameraScanner();
+    } else {
+      fileTab.classList.add('hidden');
+      scanTab.classList.remove('hidden');
+      btnScan.className = 'tab-btn flex items-center gap-2 pb-3 px-3 text-sm font-bold border-b-2 border-sky-600 text-sky-600 cursor-pointer transition';
+      btnFile.className = 'tab-btn flex items-center gap-2 pb-3 px-3 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer transition';
+      startCameraScanner();
+    }
+  }
+
+  // Drag & Drop
+  function handleDragOver(e) {
+    e.preventDefault();
+    document.getElementById('dropArea').classList.add('border-sky-500', 'bg-sky-100/50');
+  }
+
+  function handleDragLeave(e) {
+    e.preventDefault();
+    document.getElementById('dropArea').classList.remove('border-sky-500', 'bg-sky-100/50');
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    handleDragLeave(e);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  }
+
+  function handleFileSelected(e) {
+    if (e.target.files && e.target.files.length > 0) {
+      processFile(e.target.files[0]);
+    }
+  }
+
+  function processFile(file) {
+    selectedFileObject = file;
+    document.getElementById('fileInfoBox').classList.remove('hidden');
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
+
+    const reader = new FileReader();
+    const fileName = file.name.toLowerCase();
+
+    if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        parsedRecords = XLSX.utils.sheet_to_json(firstSheet);
+        renderPreviewTable(parsedRecords);
+      };
+      reader.readAsArrayBuffer(file);
+    } else if (fileName.endsWith('.json')) {
+      reader.onload = function(e) {
+        try {
+          const jsonContent = JSON.parse(e.target.result);
+          parsedRecords = Array.isArray(jsonContent) ? jsonContent : (jsonContent.deliveries || [jsonContent]);
+          renderPreviewTable(parsedRecords);
+        } catch (err) {
+          alert('Error al leer el archivo JSON: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    } else { // CSV o TXT
+      reader.onload = function(e) {
+        const text = e.target.result;
+        const workbook = XLSX.read(text, { type: 'string' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        parsedRecords = XLSX.utils.sheet_to_json(firstSheet);
+        renderPreviewTable(parsedRecords);
+      };
+      reader.readAsText(file);
+    }
+  }
+
+  function clearSelectedFile() {
+    selectedFileObject = null;
+    parsedRecords = [];
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileInfoBox').classList.add('hidden');
+    renderPreviewTable([]);
+  }
+
+  function renderPreviewTable(records) {
+    const tbody = document.getElementById('previewTableBody');
+    const badge = document.getElementById('recordsBadge');
+    const btnSubmit = document.getElementById('btnConfirmImport');
+
+    tbody.innerHTML = '';
+    badge.textContent = `${records.length} registros`;
+
+    if (records.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="px-6 py-12 text-center text-slate-400">
+            <span class="material-symbols-outlined text-3xl text-slate-300 block mb-1">table_rows</span>
+            Carga un archivo Excel, CSV o JSON en el panel izquierdo para ver la previsualización de las encomiendas.
+          </td>
+        </tr>`;
+      btnSubmit.disabled = true;
+      return;
+    }
+
+    btnSubmit.disabled = false;
+
+    records.slice(0, 30).forEach((r, idx) => {
+      const tracking = r.tracking_code || r.guia || r.id_guia || `GTR-2026-${idx+100}`;
+      const recipient = r.recipient_name || r.destinatario || 'Cliente';
+      const phone = r.recipient_phone || r.telefono || '';
+      const address = r.address || r.direccion || 'Cartagena';
+      const neighborhood = r.neighborhood || r.barrio || 'Centro';
+      const pkgType = r.package_type || r.tipo_envio || 'PAQUETE_MEDIANO';
+      const weight = r.weight_kg || r.peso || 1.0;
+      const priority = (r.priority || r.prioridad || 'MEDIA').toUpperCase();
+      const sender = r.sender_name || r.remitente || 'Hub Central';
+
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50 transition';
+      tr.innerHTML = `
+        <td class="px-3.5 py-2 font-mono font-bold text-slate-400">${idx + 1}</td>
+        <td class="px-3.5 py-2 font-mono font-bold text-slate-900">${tracking}</td>
+        <td class="px-3.5 py-2">
+          <span class="font-bold text-slate-800 block">${recipient}</span>
+          <span class="text-[10px] text-slate-400">${phone}</span>
+        </td>
+        <td class="px-3.5 py-2">
+          <span class="text-slate-800 block truncate max-w-[180px]">${address}</span>
+          <span class="text-[10px] font-bold text-sky-600">${neighborhood}</span>
+        </td>
+        <td class="px-3.5 py-2">
+          <span class="font-medium text-slate-700 block">${pkgType}</span>
+          <span class="text-[10px] text-slate-400 font-mono">${weight} kg</span>
+        </td>
+        <td class="px-3.5 py-2">
+          <span class="px-1.5 py-0.5 rounded text-[9px] font-black ${priority === 'ALTA' ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-sky-50 text-sky-700 border border-sky-200'}">
+            ${priority}
+          </span>
+        </td>
+        <td class="px-3.5 py-2 text-slate-500 truncate max-w-[120px]">${sender}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    if (records.length > 30) {
+      const trMore = document.createElement('tr');
+      trMore.innerHTML = `<td colspan="7" class="px-4 py-2 text-center text-xs font-bold text-slate-400 bg-slate-50">+ ${records.length - 30} registros adicionales listos para importar</td>`;
+      tbody.appendChild(trMore);
+    }
+  }
+
+  async function submitBulkImport() {
+    if (!parsedRecords || parsedRecords.length === 0) return;
+
+    const btnSubmit = document.getElementById('btnConfirmImport');
+    const alertBox = document.getElementById('importResultAlert');
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">sync</span><span>Importando...</span>';
+
+    try {
+      let response;
+      if (selectedFileObject) {
+        const formData = new FormData();
+        formData.append('file', selectedFileObject);
+        response = await fetch('/api/deliveries/import-batch/', {
+          method: 'POST',
+          body: formData
+        });
+      } else {
+        response = await fetch('/api/deliveries/import-batch/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(parsedRecords)
+        });
+      }
+
+      const resData = await response.json();
+      if (resData.success) {
+        alertBox.className = 'p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1 block';
+        alertBox.innerHTML = `
+          <div class="flex items-center gap-2 font-bold text-sm text-emerald-800">
+            <span class="material-symbols-outlined text-lg text-emerald-600">check_circle</span>
+            <span>¡Importación Completada Exitosamente!</span>
+          </div>
+          <p class="text-xs text-emerald-700">
+            Se registraron <b>${resData.created_count} nuevas encomiendas</b> y se actualizaron <b>${resData.updated_count}</b> en el despacho.
+          </p>
+          <div class="pt-2">
+            <a href="/coordinacion" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700">
+              Ir a Coordinar y Asignar Envíos →
+            </a>
+          </div>
+        `;
+        clearSelectedFile();
+      } else {
+        alertBox.className = 'p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 block';
+        alertBox.innerHTML = `<b>Error al importar:</b> ${resData.detail || 'Ocurrió un error inesperado'}`;
+      }
+    } catch (err) {
+      alertBox.className = 'p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 block';
+      alertBox.innerHTML = `<b>Error de conexión:</b> ${err.message}`;
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<span class="material-symbols-outlined text-sm">cloud_upload</span><span>Confirmar e Importar</span>';
+    }
+  }
+
+  // Scanner de Cámara
+  function startCameraScanner() {
+    if (html5QrScanner) {
+      return;
+    }
+    const readerDiv = document.getElementById('reader');
+    if (!readerDiv) return;
+
+    document.getElementById('btnStartCamera').classList.add('hidden');
+    document.getElementById('btnStopCamera').classList.remove('hidden');
+
+    html5QrScanner = new Html5Qrcode("reader");
+    html5QrScanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      (decodedText) => {
+        processScannedCode(decodedText);
+      },
+      () => {} // Ignorar fallas continuas de frame
+    ).catch(err => {
+      console.warn("No se pudo iniciar la cámara web:", err);
+      document.getElementById('btnStartCamera').classList.remove('hidden');
+      document.getElementById('btnStopCamera').classList.add('hidden');
+    });
+  }
+
+  function stopCameraScanner() {
+    if (html5QrScanner) {
+      html5QrScanner.stop().then(() => {
+        html5QrScanner = null;
+        document.getElementById('btnStartCamera').classList.remove('hidden');
+        document.getElementById('btnStopCamera').classList.add('hidden');
+      }).catch(() => {
+        html5QrScanner = null;
+      });
+    }
+  }
+
+  async function processScannedCode(codeString) {
+    if (!codeString || !codeString.trim()) return;
+
+    try {
+      const response = await fetch('/api/deliveries/scan-barcode-qr/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: codeString.trim() })
+      });
+
+      const res = await response.json();
+      if (res.success && res.data) {
+        populateScannedForm(res.data);
+        const badge = document.getElementById('scanStatusBadge');
+        badge.classList.remove('hidden');
+        badge.textContent = res.exists ? '✓ Envío Existente Encontrado' : '✓ Etiqueta Decodificada';
+      }
+    } catch (err) {
+      console.error("Error al procesar código:", err);
+    }
+  }
+
+  function populateScannedForm(data) {
+    document.getElementById('scanTracking').value = data.tracking_code || '';
+    document.getElementById('scanPackageType').value = data.package_type || 'PAQUETE_MEDIANO';
+    document.getElementById('scanPriority').value = data.priority || 'MEDIA';
+    document.getElementById('scanWeight').value = data.weight_kg || 1.0;
+    document.getElementById('scanSenderName').value = data.sender_name || '';
+    document.getElementById('scanSenderPhone').value = data.sender_phone || '';
+    document.getElementById('scanSenderDoc').value = data.sender_document || '';
+    document.getElementById('scanRecipientName').value = data.recipient_name || '';
+    document.getElementById('scanRecipientPhone').value = data.recipient_phone || '';
+    document.getElementById('scanRecipientEmail').value = data.recipient_email || '';
+    document.getElementById('scanAddress').value = data.address || '';
+    document.getElementById('scanNeighborhood').value = data.neighborhood || 'Centro Histórico';
+    document.getElementById('scanReferencePoint').value = data.reference_point || '';
+    document.getElementById('scanNotes').value = data.notes || '';
+  }
+
+  function clearScannedForm() {
+    document.getElementById('scannedDeliveryForm').reset();
+    document.getElementById('scanStatusBadge').classList.add('hidden');
+    document.getElementById('barcodeGunInput').value = '';
+  }
+
+  async function saveScannedDelivery(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSaveScanned');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined text-sm animate-spin">sync</span><span>Guardando...</span>';
+
+    const payload = {
+      tracking_code: document.getElementById('scanTracking').value,
+      package_type: document.getElementById('scanPackageType').value,
+      priority: document.getElementById('scanPriority').value,
+      weight_kg: parseFloat(document.getElementById('scanWeight').value) || 1.0,
+      sender_name: document.getElementById('scanSenderName').value,
+      sender_phone: document.getElementById('scanSenderPhone').value,
+      sender_document: document.getElementById('scanSenderDoc').value,
+      recipient_name: document.getElementById('scanRecipientName').value,
+      recipient_phone: document.getElementById('scanRecipientPhone').value,
+      recipient_email: document.getElementById('scanRecipientEmail').value,
+      address: document.getElementById('scanAddress').value,
+      neighborhood: document.getElementById('scanNeighborhood').value,
+      reference_point: document.getElementById('scanReferencePoint').value,
+      notes: document.getElementById('scanNotes').value,
+      city: 'Cartagena'
+    };
+
+    try {
+      const response = await fetch('/api/deliveries/import-batch/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([payload])
+      });
+
+      const res = await response.json();
+      if (res.success) {
+        alert('¡Encomienda guardada exitosamente en el sistema de despacho!');
+        clearScannedForm();
+        window.location.reload();
+      } else {
+        alert('Error al guardar: ' + (res.detail || 'Verifique los campos'));
+      }
+    } catch (err) {
+      alert('Error de conexión: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined text-base">save</span><span>Guardar Envío en el Sistema</span>';
+    }
+  }
+
+  function loadSampleQR(idx) {
+    if (idx === 1) {
+      processScannedCode('GTR-2026-QR1|PAQUETE_MEDIANO|Almacén Caribe|Restaurante Baluarte|3004528901|Calle Santo Domingo # 2-10|Centro Histórico|2.5|ALTA|Frente al Baluarte');
+    } else if (idx === 2) {
+      processScannedCode('GTR-2026-QR2|DOCUMENTO|Notaría Cuarta|Dra. Marcela Gómez|3159998877|Cra. 3 # 8-40 Edificio Flamingo|Bocagrande|0.4|MEDIA|Entregar en recepción');
+    } else {
+      processScannedCode('GTR-2026-QR3|REFRIGERADO|Pescadería Bahía|Chef Leonardo Russo|3201112233|Calle Real # 24-80|Manga|4.2|ALTA|Cadena de frío urgente');
+    }
+  }
+</script>
+{% endblock %}
